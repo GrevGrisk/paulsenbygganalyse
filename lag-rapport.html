@@ -39,6 +39,9 @@ $('calendarNext').onclick=()=>{calendarView.setDate(1);calendarView.setMonth(cal
 $('calendarToday').onclick=()=>{const iso=localDate.slice(0,10);$('weatherDate').value=norwegianDate(iso);$('weatherDate').dispatchEvent(new Event('input',{bubbles:true}));$('calendarPanel').hidden=true;$('calendarToggle').setAttribute('aria-expanded','false');};
 $('weatherDate').addEventListener('input',()=>{if(!$('calendarPanel').hidden)renderCalendar();});
 $('weatherTime').value=data.weather.values.weatherTime||localDate.slice(11,16);
+$('weatherTime').addEventListener('input',()=>{const el=$('weatherTime'),digits=el.value.replace(/\D/g,'').slice(0,4);let formatted=digits.length>2?digits.slice(0,2)+':'+digits.slice(2):digits;if(el.value!==formatted)el.value=formatted;});
+$('weatherTime').addEventListener('blur',()=>{const el=$('weatherTime'),digits=el.value.replace(/\D/g,'');if(digits.length===3)el.value='0'+digits[0]+':'+digits.slice(1);else if(digits.length===4)el.value=digits.slice(0,2)+':'+digits.slice(2);});
+
 weatherIds.filter(id=>!['weatherDate','weatherTime'].includes(id)).forEach(id=>$(id).value=data.weather.values[id]??'');
 function weatherValues(){return Object.fromEntries(weatherIds.map(id=>[id,id==='weatherDate'?(isoDate($(id).value)||$(id).value):$(id).value]));}
 function weatherDisplay(){const w=data.weather,v=w.values||{};$('weatherStatus').textContent=w.approved?'Godkjent'+(w.approvedBy?' av '+w.approvedBy:'')+' · '+(w.approvedAt||''):'Ikke godkjent'+(w.source?' · '+w.source:'');$('weatherReport').textContent=w.approved?'Værforhold godkjent: '+norwegianDate(v.weatherDate)+' '+v.weatherTime+' · '+v.weatherTemp+' °C · vind '+v.weatherWind+' m/s · nedbør '+v.weatherRain+' mm · luftfuktighet '+v.weatherHumidity+' % · skydekke '+v.weatherCloud+' %. '+(v.weatherNotes||'')+' Kilde: '+w.source+'.'+(w.changes?.length?' Manuelle endringer registrert.':''):'Værforhold ikke godkjent. Rapporten kan ikke ferdigstilles.';}

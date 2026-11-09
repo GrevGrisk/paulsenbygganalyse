@@ -1,14 +1,207 @@
 import http from 'node:http';
+import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import { Pool } from 'pg';
 
 const port = Number(process.env.PORT || 3000);
-const server = http.createServer((req, res) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Cache-Control', 'no-store');
-  if (req.url === '/health' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    return res.end(JSON.stringify({ status: 'ok', service: 'paulsen-rapport-api' }));
+const pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env.DATABASE_URL, max: 8 }) : null;
+const json = (res, status, data) => {
+  res.writeHead(status, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
+  res.end(JSON.stringify(data));
+};
+const fail = (code, message) => Object.assign(new Error(message), { code });
+const id = v => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(v);
+const text = (v, max=200) => typeof v === 'string' && v.trim() && v.length <= max ? v.trim() : null;
+const passwordHash = password => {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return 'scrypt:' + salt + ':' + hash;
+};
+const checkPassword = (password, stored) => {
+  if (typeof stored !== 'string' || !stored.startsWith('scrypt:')) return false;
+  const [,salt,hash] = stored.split(':');
+  if (!salt || !/^[0-9a-f]{128}$/.test(hash || '')) return false;
+  return crypto.timingSafeEqual(crypto.scryptSync(password,salt,64),Buffer.from(hash,'hex'));
+};
+const cookies = req => Object.fromEntries((req.headers.cookie || '').split(';').map(s=>s.trim().split('=')).filter(p=>p.length===2));
+const cookie = (res, value, age) => res.setHeader('Set-Cookie','pba_session='+value+'; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age='+age);
+const origin = process.env.APP_ORIGIN || '';
+const guardOrigin = req => {
+  if (['GET','HEAD','OPTIONS'].includes(req.method)) return;
+  const actual = req.headers.origin;
+  if (!origin || actual !== origin) throw fail(403,'Ugyldig opprinnelse');
+};
+async function body(req) {
+  if (!String(req.headers['content-type'] || '').startsWith('application/json')) throw fail(415,'Krever JSON');
+  let raw='';
+  for await (const part of req) { raw += part; if (raw.length > 1048576) throw fail(413,'For stor forespørsel'); }
+  try { return JSON.parse(raw || '{}'); } catch { throw fail(400,'Ugyldig JSON'); }
+}
+async function currentUser(req) {
+  const token = cookies(req).pba_session;
+  if (!token || !/^[0-9a-f]{64}$/.test(token)) throw fail(401,'Ikke innlogget');
+  const hash = crypto.createHash('sha256').update(token).digest('hex');
+  const {rows} = await pool.query(`SELECT u.id,u.email,u.full_name,u.role FROM portal_sessions s
+    JOIN portal_users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.is_active=true`,[hash]);
+  if (!rows[0]) throw fail(401,'Ikke innlogget');
+  return rows[0];
+}
+const staff = u => { if (!['admin','employee'].includes(u.role)) throw fail(403,'Ingen tilgang'); };
+const admin = u => { if (u.role !== 'admin') throw fail(403,'Kun administrator'); };
+async function customerAccess(user, customerId) {
+  if (user.role !== 'customer') return;
+  const r=await pool.query('SELECT 1 FROM customer_memberships WHERE user_id=$1 AND customer_id=$2',[user.id,customerId]);
+  if (!r.rowCount) throw fail(404,'Ikke funnet');
+}
+async function propertyAccess(user, propertyId) {
+  const r=await pool.query('SELECT id,customer_id,name,address,postal_code,municipality,cadastral_reference FROM properties WHERE id=$1',[propertyId]);
+  if (!r.rowCount) throw fail(404,'Eiendom ikke funnet');
+  await customerAccess(user,r.rows[0].customer_id);
+  return r.rows[0];
+}
+async function reportAccess(user, reportId) {
+  const r=await pool.query(`SELECT r.*,p.customer_id FROM reports r JOIN properties p ON p.id=r.property_id WHERE r.id=$1`,[reportId]);
+  if (!r.rowCount) throw fail(404,'Rapport ikke funnet');
+  const report=r.rows[0];
+  await customerAccess(user,report.customer_id);
+  if (user.role==='customer' && report.status!=='published') throw fail(404,'Rapport ikke funnet');
+  return report;
+}
+async function transaction(fn) {
+  const c=await pool.connect();
+  try { await c.query('BEGIN'); const result=await fn(c); await c.query('COMMIT'); return result; }
+  catch(e) { await c.query('ROLLBACK'); throw e; }
+  finally { c.release(); }
+}
+async function init() {
+  if (!pool) { console.warn('DATABASE_URL mangler. Kun /health tilgjengelig.'); return; }
+  const sql=await fs.readFile(new URL('../database/report_portal_schema.sql',import.meta.url),'utf8');
+  await pool.query(sql);
+  await pool.query(`CREATE TABLE IF NOT EXISTS portal_sessions (
+    token_hash text PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES portal_users(id) ON DELETE CASCADE,
+    expires_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`);
+  console.log('Databaseskjema kontrollert');
+}
+async function handler(req,res) {
+  const url=new URL(req.url,'http://localhost');
+  if (url.pathname==='/health' && req.method==='GET') {
+    if (!pool) return json(res,503,{status:'database_not_configured'});
+    try { await pool.query('SELECT 1'); return json(res,200,{status:'ok'}); }
+    catch { return json(res,503,{status:'database_unavailable'}); }
   }
-  res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-  res.end(JSON.stringify({ error: 'Not found' }));
-});
-server.listen(port, '0.0.0.0', () => console.log('API listening on port', port));
+  if (!pool) throw fail(503,'Database ikke konfigurert');
+  if (!url.pathname.startsWith('/api/')) throw fail(404,'Ikke funnet');
+  guardOrigin(req);
+  const method=req.method;
+  if (url.pathname==='/api/login' && method==='POST') {
+    const b=await body(req);
+    if (!text(b.email,254) || typeof b.password!=='string') throw fail(400,'Mangler e-post eller passord');
+    const {rows}=await pool.query('SELECT * FROM portal_users WHERE lower(email)=lower($1) AND is_active=true',[b.email.trim()]);
+    if (!rows[0] || !checkPassword(b.password,rows[0].password_hash)) throw fail(401,'Feil e-post eller passord');
+    const token=crypto.randomBytes(32).toString('hex');
+    await pool.query('INSERT INTO portal_sessions(token_hash,user_id,expires_at) VALUES ($1,$2,now()+interval \'7 days\')',
+      [crypto.createHash('sha256').update(token).digest('hex'),rows[0].id]);
+    cookie(res,token,604800);
+    return json(res,200,{id:rows[0].id,email:rows[0].email,name:rows[0].full_name,role:rows[0].role});
+  }
+  const user=await currentUser(req);
+  if (url.pathname==='/api/logout' && method==='POST') {
+    const token=cookies(req).pba_session;
+    await pool.query('DELETE FROM portal_sessions WHERE token_hash=$1',[crypto.createHash('sha256').update(token).digest('hex')]);
+    cookie(res,'',0); return json(res,200,{ok:true});
+  }
+  if (url.pathname==='/api/me' && method==='GET') return json(res,200,user);
+  if (url.pathname==='/api/customers' && method==='GET') {
+    const q=user.role==='customer'
+      ? await pool.query('SELECT c.id,c.name FROM customers c JOIN customer_memberships m ON m.customer_id=c.id WHERE m.user_id=$1 ORDER BY c.name',[user.id])
+      : await pool.query('SELECT id,name,organization_number FROM customers ORDER BY name');
+    return json(res,200,q.rows);
+  }
+  if (url.pathname==='/api/customers' && method==='POST') {
+    admin(user); const b=await body(req);
+    if (!text(b.name)) throw fail(400,'Mangler kundenavn');
+    const q=await pool.query('INSERT INTO customers(name,organization_number) VALUES ($1,$2) RETURNING *',[b.name.trim(),text(b.organization_number,30)]);
+    return json(res,201,q.rows[0]);
+  }
+  if (url.pathname==='/api/properties' && method==='GET') {
+    const customerId=url.searchParams.get('customer_id');
+    if (customerId && !id(customerId)) throw fail(400,'Ugyldig kunde');
+    if (customerId) await customerAccess(user,customerId);
+    const q=await pool.query(`SELECT p.id,p.customer_id,p.name,p.address,p.postal_code,p.municipality,p.cadastral_reference
+      FROM properties p WHERE ($1::uuid IS NULL OR p.customer_id=$1)
+      AND ($2::text <> 'customer' OR EXISTS (SELECT 1 FROM customer_memberships m WHERE m.customer_id=p.customer_id AND m.user_id=$3))
+      ORDER BY p.name`,[customerId,user.role,user.id]);
+    return json(res,200,q.rows);
+  }
+  if (url.pathname==='/api/properties' && method==='POST') {
+    staff(user); const b=await body(req);
+    if (!id(b.customer_id)||!text(b.name)||!text(b.address)) throw fail(400,'Mangler eiendomsdata');
+    const q=await pool.query(`INSERT INTO properties(customer_id,name,address,postal_code,municipality,cadastral_reference)
+      VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,[b.customer_id,b.name.trim(),b.address.trim(),text(b.postal_code,10),text(b.municipality,100),text(b.cadastral_reference,100)]);
+    return json(res,201,q.rows[0]);
+  }
+  if (url.pathname==='/api/reports' && method==='GET') {
+    const propertyId=url.searchParams.get('property_id');
+    if (!id(propertyId)) throw fail(400,'Velg eiendom');
+    await propertyAccess(user,propertyId);
+    const q=await pool.query(`SELECT id,property_id,title,report_type,status,created_at,updated_at,published_at FROM reports
+      WHERE property_id=$1 AND ($2::text <> 'customer' OR status='published') ORDER BY created_at DESC`,[propertyId,user.role]);
+    return json(res,200,q.rows);
+  }
+  if (url.pathname==='/api/reports' && method==='POST') {
+    staff(user); const b=await body(req);
+    if (!id(b.property_id)||!text(b.title,300)||!b.content||typeof b.content!=='object'||Array.isArray(b.content)) throw fail(400,'Ugyldig rapport');
+    await propertyAccess(user,b.property_id);
+    const q=await pool.query(`INSERT INTO reports(property_id,created_by,title,report_type,content)
+      VALUES ($1,$2,$3,$4,$5) RETURNING *`,[b.property_id,user.id,b.title.trim(),text(b.report_type,100),JSON.stringify(b.content)]);
+    return json(res,201,q.rows[0]);
+  }
+  const match=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})(?:\/(submit|approve|publish))?$/i);
+  if (match) {
+    const reportId=match[1],action=match[2];
+    const r=await reportAccess(user,reportId);
+    if (!action && method==='GET') return json(res,200,r);
+    staff(user);
+    if (!action && method==='PATCH') {
+      if (r.status!=='draft') throw fail(409,'Kun utkast kan endres');
+      const b=await body(req);
+      if (!text(b.title,300)||!b.content||typeof b.content!=='object'||Array.isArray(b.content)) throw fail(400,'Ugyldig rapport');
+      const q=await pool.query(`UPDATE reports SET title=$2,content=$3,updated_at=now()
+        WHERE id=$1 AND status='draft' RETURNING *`,[reportId,b.title.trim(),JSON.stringify(b.content)]);
+      if (!q.rowCount) throw fail(409,'Rapportstatus er endret');
+      return json(res,200,q.rows[0]);
+    }
+    if (method==='POST' && action==='submit') {
+      const q=await pool.query("UPDATE reports SET status='review',updated_at=now() WHERE id=$1 AND status='draft' RETURNING id,status",[reportId]);
+      if (!q.rowCount) throw fail(409,'Rapporten kan ikke sendes til kontroll');
+      return json(res,200,q.rows[0]);
+    }
+    if (method==='POST' && action==='approve') {
+      return json(res,200,await transaction(async c=>{
+        const q=await c.query("UPDATE reports SET status='approved',approved_by=$2,approved_at=now(),updated_at=now() WHERE id=$1 AND status='review' RETURNING *",[reportId,user.id]);
+        if (!q.rowCount) throw fail(409,'Rapporten kan ikke godkjennes');
+        await c.query(`INSERT INTO report_versions(report_id,version_number,content,created_by)
+          VALUES($1,1,$2,$3)`,[reportId,JSON.stringify(q.rows[0].content),user.id]);
+        return {id:reportId,status:'approved'};
+      }));
+    }
+    if (method==='POST' && action==='publish') {
+      return json(res,200,await transaction(async c=>{
+        const q=await c.query(`UPDATE reports SET status='published',published_by=$2,published_at=now(),updated_at=now()
+          WHERE id=$1 AND status='approved' AND approved_by IS NOT NULL AND approved_at IS NOT NULL RETURNING id,property_id,status,published_at`,[reportId,user.id]);
+        if (!q.rowCount) throw fail(409,'Kun godkjente rapporter kan overføres');
+        return q.rows[0];
+      }));
+    }
+  }
+  throw fail(404,'Ikke funnet');
+}
+await init();
+http.createServer((req,res)=>handler(req,res).catch(e=>{
+  const code=e.code && Number.isInteger(e.code) ? e.code : e.code==='23503'?400:e.code==='23505'?409:500;
+  if(code===500) console.error('Request failed',e);
+  json(res,code,{error:code===500?'Intern serverfeil':e.message});
+})).listen(port,'0.0.0.0',()=>console.log('Rapport API lytter pa',port));

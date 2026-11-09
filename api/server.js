@@ -14,13 +14,13 @@ const id = v => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(v)
 const text = (v, max=200) => typeof v === 'string' && v.trim() && v.length <= max ? v.trim() : null;
 const reportPrefix = type => {
   const t=(type||'').toLowerCase();
-  if(t.includes('termografi'))return 'TERM';
-  if(t.includes('lekkasje'))return 'LEK';
-  if(t.includes('energi'))return 'ENE';
+  if(t.includes('modellering')||t.includes('modell'))return 'MOD';
+  if(t.includes('termografi')||t.includes('termograf'))return 'TAK-TMO';
+  if(t.includes('visuell')&&t.includes('tak'))return 'TAK-VIS';
   if(t.includes('solcelle'))return 'SOL';
-  if(t.includes('oppmåling')||t.includes('3d'))return 'OPP';
-  if(t.includes('dronefoto'))return 'FOTO';
-  if(t.includes('tak'))return 'TAK';
+  if(t.includes('energi'))return 'ENG';
+  if(t.includes('oppmåling')||t.includes('3d'))return 'OPPM';
+  if(t.includes('tak'))return 'TAK-VIS';
   return 'RAP';
 };
 const reportLabel = r => r && ({...r,report_code:reportPrefix(r.report_type)+'-'+String(r.report_number).padStart(4,'0')+'-'+new Date(r.created_at).toLocaleDateString('en-GB',{month:'2-digit',year:'2-digit',timeZone:'Europe/Oslo'}).replace('/','')});

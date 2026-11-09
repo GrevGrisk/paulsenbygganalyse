@@ -175,7 +175,7 @@ async function handler(req,res) {
   if (url.pathname==='/api/quote-requests' && method==='POST') {
     const b=await body(req);
     const allowed=['TAK-VIS','TAK-TMO','SOL','ENG','OPPM','MOD'];
-    if(!['private','business'].includes(b.customer_type)||!text(b.customer_name)||!text(b.email,254)||!/^[^\s@]+@[^\s@]+\\.[^\s@]+$/.test(b.email)||!text(b.property_address,250)||!Array.isArray(b.services)||!b.services.length||b.services.length>allowed.length||new Set(b.services).size!==b.services.length||!b.services.every(v=>allowed.includes(v)))throw fail(400,'Kontroller obligatoriske opplysninger');
+    if(!['private','business'].includes(b.customer_type)||!text(b.customer_name)||!text(b.email,254)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.email)||!text(b.property_address,250)||!Array.isArray(b.services)||!b.services.length||b.services.length>allowed.length||new Set(b.services).size!==b.services.length||!b.services.every(v=>allowed.includes(v)))throw fail(400,'Kontroller obligatoriske opplysninger');
     const fields=['phone','organization_number','postal_code','municipality','gnr','bnr','building_type','property_notes'];
     const lengths=[30,30,10,100,20,20,100,4000];
     const extra=fields.map((key,i)=>b[key]===undefined||b[key]===''?null:text(b[key],lengths[i]));
@@ -198,7 +198,7 @@ async function handler(req,res) {
       const q=await c.query("SELECT * FROM quote_requests WHERE public_token=$1 FOR UPDATE",[quoteRespond[1]]);
       const offer=q.rows[0];
       if(!offer||offer.status!=='sent')throw fail(409,'Tilbudet er ikke tilgjengelig for svar');
-      if(offer.valid_until && new Date(offer.valid_until+'T23:59:59Z')<new Date())throw fail(409,'Tilbudet er utløpt');
+      if(offer.valid_until && new Date(String(offer.valid_until).slice(0,10)+'T23:59:59Z')<new Date())throw fail(409,'Tilbudet er utløpt');
       if(b.action==='declined'){await c.query("UPDATE quote_requests SET status='declined',updated_at=now() WHERE id=$1",[offer.id]);return {status:'declined'};}
       const cust=await c.query('INSERT INTO customers(name,organization_number) VALUES($1,$2) RETURNING id',[offer.customer_name,offer.organization_number]);
       const prop=await c.query('INSERT INTO properties(customer_id,name,address,postal_code,municipality,cadastral_reference) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',[cust.rows[0].id,offer.property_address,offer.property_address,offer.postal_code,offer.municipality,[offer.gnr,offer.bnr].filter(Boolean).join('/')]);

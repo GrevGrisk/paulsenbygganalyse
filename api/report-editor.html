@@ -36,7 +36,22 @@ function render(){
   for(const t of [f.category+' · '+f.priority+' prioritet · '+f.location,...(f.temperatures&&Object.values(f.temperatures).some(v=>v!==null&&v!==undefined&&v!=='')?['Temperaturer: min '+(f.temperatures.min??'–')+' °C · snitt '+(f.temperatures.avg??'–')+' °C · maks '+(f.temperatures.max??'–')+' °C']:[]),f.description,'Tiltak: '+f.action]){const p=document.createElement('p');p.textContent=t;div.append(p)}
   const pictures=[['overview','Vanlig oversiktsbilde'],['thermalOverview','Termografisk oversiktsbilde'],['detail','Vanlig detaljbilde'],['thermalDetail','Termografisk detaljbilde']].flatMap(([key,role])=>f.photos?.[key]?.src?[{...f.photos[key],role}]:[]);
   if(!pictures.length && f.images?.length)f.images.forEach((src,i)=>pictures.push({src,role:i?'Detaljbilde':'Oversiktsbilde',caption:''}));
-  if(pictures.length){const gallery=document.createElement('div');gallery.className='media';pictures.forEach(p=>{const figure=document.createElement('figure');figure.style.margin='0';const image=document.createElement('img');image.src=p.src;image.alt=p.role;image.onclick=()=>{$('large').src=p.src;$('viewer').showModal()};figure.append(image);const caption=document.createElement('figcaption');caption.textContent=p.role+(p.caption?' – '+p.caption:'');figure.append(caption);gallery.append(figure)});div.append(gallery)}
+  if(pictures.length){const gallery=document.createElement('div');gallery.className='media';pictures.forEach(p=>{const figure=document.createElement('figure');figure.style.margin='0';const image=document.createElement('img');image.src=p.src;image.alt=p.role;image.onclick=()=>{$('large').src=p.src;$('viewer').showModal()};figure.append(image);const caption=document.createElement('figcaption');caption.textContent=p.role+(p.caption?' – '+p.caption:'');figure.append(caption);
+    const removePhoto=document.createElement('button');removePhoto.type='button';removePhoto.className='secondary';removePhoto.textContent='Fjern bilde';removePhoto.style.marginTop='8px';removePhoto.style.background='#792c39';removePhoto.style.color='#fff';
+    removePhoto.onclick=()=>{
+      if(!confirm('Fjerne «'+p.role+'» fra funn '+String(index+1).padStart(2,'0')+'?\\n\\nBildet fjernes fra rapporten, men beholdes i bildearkivet.'))return;
+      const keys=['overview','thermalOverview','detail','thermalDetail'];
+      const matchingKey=keys.find(key=>f.photos?.[key]?.src===p.src);
+      if(matchingKey)delete f.photos[matchingKey];
+      if(Array.isArray(f.images))f.images=f.images.filter(src=>src!==p.src);
+      // Legacy images can duplicate the structured photos. Remove their matching references too.
+      if($('add').dataset.editIndex!==undefined&&Number($('add').dataset.editIndex)===index){
+        const captionIds={overview:'overviewFindingCaption',thermalOverview:'thermalOverviewFindingCaption',detail:'detailFindingCaption',thermalDetail:'thermalDetailFindingCaption'};
+        if(matchingKey)$(captionIds[matchingKey]).value='';
+      }
+      queueServerSave();render();
+    };
+    figure.append(removePhoto);gallery.append(figure)});div.append(gallery)}
   const edit=document.createElement('button');edit.type='button';edit.textContent='Rediger funn';edit.className='secondary';
   edit.onclick=()=>{['category','priority','location','type','description','action'].forEach(id=>$(id).value=f[id]||'');$('tempMin').value=f.temperatures?.min??'';$('tempAvg').value=f.temperatures?.avg??'';$('tempMax').value=f.temperatures?.max??'';$('overviewFindingCaption').value=f.photos?.overview?.caption||'';$('overviewFindingPhoto').value='';$('thermalOverviewFindingCaption').value=f.photos?.thermalOverview?.caption||'';$('thermalOverviewFindingPhoto').value='';$('detailFindingCaption').value=f.photos?.detail?.caption||'';$('detailFindingPhoto').value='';$('thermalDetailFindingCaption').value=f.photos?.thermalDetail?.caption||'';$('thermalDetailFindingPhoto').value='';$('add').dataset.editIndex=String(index);$('add').textContent='Lagre endringer';$('category').scrollIntoView({behavior:'smooth',block:'center'});};
   div.append(edit);

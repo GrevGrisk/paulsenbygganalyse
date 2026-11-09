@@ -22,7 +22,13 @@ a{color:#b3d9e9}ul{padding-left:22px}li{padding:8px 0}small{color:#a8bec8}.error
 <p><button id="loginButton">Logg inn</button></p><p class="error" id="loginError" role="alert"></p></form></section>
 <section id="dashboard" hidden><div class="toolbar"><div><h1>Rapportportal</h1><p id="welcome"></p></div><button id="logout" class="secondary">Logg ut</button></div>
 <div class="grid"><div class="tile"><h2>Kunder</h2><ul id="customers"></ul></div><div class="tile"><h2>Eiendommer</h2><ul id="properties"></ul></div><div class="tile"><h2>Rapporter</h2><ul id="reports"></ul></div></div>
-<div id="staff" class="tile" hidden style="margin-top:18px"><h2>Rapportarbeid</h2><p>Rapporter opprettes og behandles av ansatte. Tilkobling til eksisterende inspeksjonsskjema kommer i neste fase.</p></div>
+<div id="staff" class="tile" hidden style="margin-top:18px"><h2>Rapportarbeid</h2>
+<p>Opprett kunder, eiendommer og rapportutkast. Eksisterende detaljskjema kobles på i neste fase.</p>
+<div class="grid">
+<form id="customerForm"><h3>Ny kunde</h3><label for="customerName">Kundenavn</label><input id="customerName" required maxlength="200"><p><button>Opprett kunde</button></p></form>
+<form id="propertyForm"><h3>Ny eiendom</h3><label for="propertyCustomer">Kunde</label><select id="propertyCustomer" required></select><label for="propertyName">Eiendomsnavn</label><input id="propertyName" required><label for="propertyAddress">Adresse</label><input id="propertyAddress" required><p><button>Opprett eiendom</button></p></form>
+<form id="reportForm"><h3>Nytt rapportutkast</h3><label for="reportProperty">Eiendom</label><select id="reportProperty" required></select><label for="reportTitle">Rapporttittel</label><input id="reportTitle" required maxlength="300"><label for="reportType">Rapporttype</label><select id="reportType"><option>Visuell takinspeksjon</option><option>Takinspeksjon – termografi</option><option>Lekkasjesøk</option><option>Energiscreening</option><option>Solcelleinspeksjon</option><option>Oppmåling / 3D</option><option>Dronefoto</option></select><p><button>Opprett utkast</button></p></form>
+</div><p id="staffMessage" role="status"></p></div>
 <p class="error" id="dashboardError" role="alert"></p></section>
 <p id="loading">Laster portal …</p>
 </main><script>
@@ -30,15 +36,17 @@ const el=id=>document.getElementById(id);
 const api=async(path,options={})=>{const r=await fetch(path,{credentials:'same-origin',...options});let data;try{data=await r.json()}catch{data={error:'Ugyldig svar'}}if(!r.ok)throw new Error(data.error||'Forespørselen feilet');return data};
 const show=(name)=>{for(const n of ['loading','login','dashboard'])el(n).hidden=n!==name};
 const li=(parent,label)=>{const node=document.createElement('li');node.textContent=label;el(parent).append(node)};
-let current;
+let current; let propertyOptions=[];
 async function load(){
  const me=await api('/api/me');current=me;el('welcome').textContent='Innlogget som '+me.full_name+' ('+me.role+')';
  el('staff').hidden=me.role==='customer';show('dashboard');
  try{
-  const customers=await api('/api/customers');el('customers').replaceChildren();el('properties').replaceChildren();el('reports').replaceChildren();
+  const customers=await api('/api/customers');propertyOptions=[];el('propertyCustomer').replaceChildren();el('reportProperty').replaceChildren();
+  for(const c of customers){const o=document.createElement('option');o.value=c.id;o.textContent=c.name;el('propertyCustomer').append(o)}
+  el('customers').replaceChildren();el('properties').replaceChildren();el('reports').replaceChildren();
   if(!customers.length)li('customers','Ingen kunder registrert');
   for(const c of customers){li('customers',c.name);const properties=await api('/api/properties?customer_id='+encodeURIComponent(c.id));
-   for(const p of properties){li('properties',p.name+' – '+p.address);const reports=await api('/api/reports?property_id='+encodeURIComponent(p.id));
+   for(const p of properties){propertyOptions.push(p);const option=document.createElement('option');option.value=p.id;option.textContent=c.name+' – '+p.name;el('reportProperty').append(option);li('properties',p.name+' – '+p.address);const reports=await api('/api/reports?property_id='+encodeURIComponent(p.id));
     for(const r of reports)li('reports',r.title+' ('+r.status+')');
    }
   }
@@ -46,6 +54,13 @@ async function load(){
   if(!el('reports').children.length)li('reports','Ingen rapporter tilgjengelig');
  }catch(e){el('dashboardError').textContent=e.message}
 }
+async function submitForm(e,path,makeBody){e.preventDefault();const button=e.target.querySelector('button');button.disabled=true;el('staffMessage').textContent='';
+ try{await api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(makeBody())});e.target.reset();el('staffMessage').className='ok';el('staffMessage').textContent='Lagret';await load()}
+ catch(err){el('staffMessage').className='error';el('staffMessage').textContent=err.message}
+ finally{button.disabled=false}}
+el('customerForm').addEventListener('submit',e=>submitForm(e,'/api/customers',()=>({name:el('customerName').value})));
+el('propertyForm').addEventListener('submit',e=>submitForm(e,'/api/properties',()=>({customer_id:el('propertyCustomer').value,name:el('propertyName').value,address:el('propertyAddress').value})));
+el('reportForm').addEventListener('submit',e=>submitForm(e,'/api/reports',()=>({property_id:el('reportProperty').value,title:el('reportTitle').value,report_type:el('reportType').value,content:{fields:{},modules:[],findings:[],weather:{approved:false}}})));
 el('loginForm').addEventListener('submit',async e=>{e.preventDefault();el('loginError').textContent='';el('loginButton').disabled=true;
  try{await api('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:el('email').value,password:el('password').value})});
  el('password').value='';await load()}catch(e){el('loginError').textContent=e.message}finally{el('loginButton').disabled=false}});

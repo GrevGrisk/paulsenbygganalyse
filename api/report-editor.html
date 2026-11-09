@@ -16,8 +16,8 @@ const fields=['reportConclusion','reportRecommendation','parent','company','addr
 $('generateReport').onclick=async()=>{const button=$('generateReport');button.disabled=true;button.textContent='Klargjør rapport …';try{save();const warnings=[];const coverFile=$('coverImage').files[0];let cover=data.cover||null;if(coverFile){try{cover=await imageToData(coverFile,'forside01');}catch(err){warnings.push('Forsidebilde: '+err.message);}}const overview=(data.overview||[]).filter(x=>x&&(typeof x==='string'||x.src)).slice(0,5);const findings=data.findings.map(f=>({...f,images:f.images||[]}));data.cover=cover;data.overview=overview;queueServerSave();const payload={fields:data.fields,modules:data.modules,findings,weather:data.weather,cover,overview,created:new Date().toISOString()};try{sessionStorage.setItem('pba-generated-report-v1',JSON.stringify(payload));}catch(storageError){payload.overview=[];payload.findings=payload.findings.map(f=>({...f,images:[]}));try{sessionStorage.setItem('pba-generated-report-v1',JSON.stringify(payload));warnings.push('Bildemengden var for stor for midlertidig lagring. Rapporten åpnes uten funn- og oversiktsbilder.');}catch(e){throw new Error('Nettleseren har ikke nok lagringsplass til rapporten.');}}await saveNow();if(warnings.length)alert('Rapporten åpnes, men noen bilder kunne ikke tas med:\n\n'+warnings.join('\n'));location.href='/report-preview?id='+encodeURIComponent(activeReportId);}catch(err){alert('Rapporten kunne ikke klargjøres: '+err.message);}finally{button.disabled=false;button.textContent='Forhåndsvis ferdig rapport →';}};
 let coverImageUrl=null;
 function renderCoverImage(){const has=Boolean(coverImageUrl);$('coverImagePreview').hidden=!has;$('coverReport').hidden=!has;if(has){$('coverImageDisplay').src=coverImageUrl;$('coverReportImage').src=coverImageUrl;}}
-$('coverImage').addEventListener('change',e=>{const file=e.target.files[0];if(!file)return;if(!file.type.startsWith('image/')){alert('Velg en bildefil.');e.target.value='';return;}if(coverImageUrl)URL.revokeObjectURL(coverImageUrl);coverImageUrl=URL.createObjectURL(file);$('coverImageName').textContent=file.name;$('coverReportCaption').textContent='Valgt forsidebilde · '+file.name;renderCoverImage();});
-$('removeCoverImage').addEventListener('click',()=>{if(coverImageUrl)URL.revokeObjectURL(coverImageUrl);coverImageUrl=null;$('coverImage').value='';$('coverImageDisplay').removeAttribute('src');$('coverReportImage').removeAttribute('src');renderCoverImage();});
+$('coverImage').addEventListener('change',e=>{const file=e.target.files[0];if(!file)return;if(!file.type.startsWith('image/')){alert('Velg en bildefil.');e.target.value='';return;}if(coverImageUrl?.startsWith('blob:'))URL.revokeObjectURL(coverImageUrl);coverImageUrl=URL.createObjectURL(file);$('coverImageName').textContent=file.name;$('coverReportCaption').textContent='Valgt forsidebilde · '+file.name;renderCoverImage();});
+$('removeCoverImage').addEventListener('click',()=>{if(coverImageUrl?.startsWith('blob:'))URL.revokeObjectURL(coverImageUrl);coverImageUrl=null;data.cover=null;queueServerSave();$('coverImage').value='';$('coverImageDisplay').removeAttribute('src');$('coverReportImage').removeAttribute('src');renderCoverImage();});
 renderCoverImage();
 
 
@@ -259,7 +259,18 @@ async function loadServerReport(){
  data.fields||={};data.modules||=[];data.findings||=[];
  fields.forEach(id=>$(id).value=data.fields[id]||'');
  document.querySelectorAll('[data-mod]').forEach(e=>e.checked=data.modules.includes(+e.dataset.mod));
- render();renderOverview();weatherDisplay();photoRender();loaded=true;
+ render();renderOverview();
+ const savedWeather=data.weather?.values||{};
+ weatherIds.forEach(id=>{
+  if(id==='weatherDate')$(id).value=norwegianDate(savedWeather[id]||'');
+  else $(id).value=savedWeather[id]??'';
+ });
+ if(coverImageUrl?.startsWith('blob:'))URL.revokeObjectURL(coverImageUrl);
+ coverImageUrl=typeof data.cover==='string'?data.cover:(data.cover?.src||null);
+ $('coverImageName').textContent=coverImageUrl?'Lagret forsidebilde':'';
+ $('coverReportCaption').textContent=coverImageUrl?'Lagret forsidebilde':'';
+ renderCoverImage();
+ weatherDisplay();photoRender();loaded=true;
  $('saveStatus').textContent='Rapportutkast lastet fra server';
 }
 window.addEventListener('pagehide',()=>{if(pending)flushServerSave()});

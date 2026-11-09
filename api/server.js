@@ -46,7 +46,7 @@ const guardOrigin = req => {
 };
 async function body(req) {
   if (!String(req.headers['content-type'] || '').startsWith('application/json')) throw fail(415,'Krever JSON');
-  const maxBytes = req.method === 'PATCH' && /^\\/api\\/reports\\/[0-9a-f-]{36}$/i.test(new URL(req.url,'http://localhost').pathname) ? 24 * 1024 * 1024 : 1024 * 1024;
+  const maxBytes = req.method === 'PATCH' && /^\/api\/reports\/[0-9a-f-]{36}$/i.test(new URL(req.url,'http://localhost').pathname) ? 24 * 1024 * 1024 : 1024 * 1024;
   let size=0;const parts=[];
   for await (const part of req) { size+=part.length; if(size>maxBytes)throw fail(413,'Rapporten inneholder for mange eller for store bilder. Maks 24 MB per lagring.');parts.push(part); }
   try { return JSON.parse(Buffer.concat(parts).toString('utf8') || '{}'); } catch { throw fail(400,'Ugyldig JSON'); }

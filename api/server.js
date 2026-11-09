@@ -395,6 +395,18 @@ async function handler(req,res) {
     const r=await reportAccess(user,reportId);
     if (!action && method==='GET') return json(res,200,reportLabel(r));
     staff(user);
+    if (!action && method==='DELETE') {
+      admin(user);
+      const expected=reportLabel(r).report_code;
+      const confirmation=req.headers['x-confirm-report-code'];
+      if(typeof confirmation!=='string'||confirmation!==expected)throw fail(400,'Bekreft riktig rapportnummer før sletting');
+      await transaction(async c=>{
+        await c.query('UPDATE quote_requests SET report_id=NULL WHERE report_id=$1',[reportId]);
+        const deleted=await c.query('DELETE FROM reports WHERE id=$1 RETURNING id',[reportId]);
+        if(!deleted.rowCount)throw fail(404,'Rapport ikke funnet');
+      });
+      return json(res,200,{deleted:true,report_code:expected});
+    }
     if (!action && method==='PATCH') {
       if (r.status!=='draft') throw fail(409,'Kun utkast kan endres');
       const b=await body(req);

@@ -109,6 +109,11 @@ async function handler(req,res) {
     res.writeHead(204); return res.end();
   }
   const url=new URL(req.url,'http://localhost');
+  if (url.pathname==='/' && req.method==='GET') {
+    const page=await fs.readFile(new URL('./portal.html',import.meta.url));
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"});
+    return res.end(page);
+  }
   if (url.pathname==='/health' && req.method==='GET') {
     if (!pool) return json(res,503,{status:'database_not_configured'});
     try { await pool.query('SELECT 1'); return json(res,200,{status:'ok'}); }

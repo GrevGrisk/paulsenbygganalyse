@@ -102,3 +102,35 @@ ALTER TABLE reports ADD COLUMN IF NOT EXISTS report_number bigint;
 ALTER TABLE reports ALTER COLUMN report_number SET DEFAULT nextval('report_number_seq');
 UPDATE reports SET report_number=nextval('report_number_seq') WHERE report_number IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS reports_number_unique ON reports(report_number);
+
+CREATE TABLE IF NOT EXISTS quote_requests (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ public_token text NOT NULL UNIQUE,
+ customer_type text NOT NULL CHECK(customer_type IN ('private','business')),
+ customer_name text NOT NULL,
+ email text NOT NULL,
+ phone text,
+ organization_number text,
+ property_address text NOT NULL,
+ postal_code text,
+ municipality text,
+ gnr text,
+ bnr text,
+ building_type text,
+ property_notes text,
+ services jsonb NOT NULL,
+ status text NOT NULL DEFAULT 'new' CHECK(status IN ('new','priced','sent','accepted','declined')),
+ line_items jsonb NOT NULL DEFAULT '[]'::jsonb,
+ discount_percent numeric(5,2) NOT NULL DEFAULT 0,
+ price_display text NOT NULL DEFAULT 'incl' CHECK(price_display IN ('incl','excl')),
+ offer_notes text,
+ valid_until date,
+ sent_at timestamptz,
+ accepted_at timestamptz,
+ customer_id uuid REFERENCES customers(id),
+ property_id uuid REFERENCES properties(id),
+ report_id uuid REFERENCES reports(id),
+ created_at timestamptz NOT NULL DEFAULT now(),
+ updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS quote_requests_created_idx ON quote_requests(created_at DESC);

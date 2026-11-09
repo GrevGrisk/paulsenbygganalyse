@@ -75,7 +75,7 @@ async function transaction(fn) {
 }
 async function init() {
   if (!pool) { console.warn('DATABASE_URL mangler. Kun /health tilgjengelig.'); return; }
-  const sql=await fs.readFile(new URL('../database/report_portal_schema.sql',import.meta.url),'utf8');
+  const sql=await fs.readFile(new URL('./schema.sql',import.meta.url),'utf8');
   await pool.query(sql);
   await pool.query(`CREATE TABLE IF NOT EXISTS portal_sessions (
     token_hash text PRIMARY KEY,

@@ -207,6 +207,7 @@ async function handler(req,res) {
       return json(res,200,q.rows[0]);
     }
     if (method==='POST' && action==='approve') {
+      admin(user);
       return json(res,200,await transaction(async c=>{
         const q=await c.query("UPDATE reports SET status='approved',approved_by=$2,approved_at=now(),updated_at=now() WHERE id=$1 AND status='review' RETURNING *",[reportId,user.id]);
         if (!q.rowCount) throw fail(409,'Rapporten kan ikke godkjennes');
@@ -216,6 +217,7 @@ async function handler(req,res) {
       }));
     }
     if (method==='POST' && action==='publish') {
+      admin(user);
       return json(res,200,await transaction(async c=>{
         const q=await c.query(`UPDATE reports SET status='published',published_by=$2,published_at=now(),updated_at=now()
           WHERE id=$1 AND status='approved' AND approved_by IS NOT NULL AND approved_at IS NOT NULL RETURNING id,property_id,status,published_at`,[reportId,user.id]);

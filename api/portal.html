@@ -21,7 +21,7 @@ a{color:#b3d9e9}ul{padding-left:22px}li{padding:8px 0}small{color:#a8bec8}.error
 <label for="password">Passord</label><input id="password" type="password" autocomplete="current-password" required>
 <p><button id="loginButton">Logg inn</button></p><p class="error" id="loginError" role="alert"></p></form></section>
 <section id="dashboard" hidden><div class="toolbar"><div><h1>Rapportportal</h1><p id="welcome"></p></div><button id="logout" class="secondary">Logg ut</button></div>
-<div class="grid"><div class="tile"><h2>Kunder</h2><ul id="customers"></ul></div><div class="tile"><h2>Eiendommer</h2><ul id="properties"></ul></div><div class="tile"><h2>Rapporter</h2><ul id="reports"></ul></div></div>
+<p><a href="/pilot">Åpne pilotmeny →</a></p><div class="grid"><div class="tile"><h2>Kunder</h2><ul id="customers"></ul></div><div class="tile"><h2>Eiendommer</h2><ul id="properties"></ul></div><div class="tile"><h2>Rapporter</h2><ul id="reports"></ul></div></div>
 <div id="staff" class="tile" hidden style="margin-top:18px"><h2>Rapportarbeid</h2>
 <p>Opprett kunder, eiendommer og rapportutkast. Eksisterende detaljskjema kobles på i neste fase.</p>
 <div class="grid">
@@ -39,7 +39,7 @@ const li=(parent,label)=>{const node=document.createElement('li');node.textConte
 let current; let propertyOptions=[];
 async function load(){
  const me=await api('/api/me');current=me;el('welcome').textContent='Innlogget som '+me.full_name+' ('+me.role+')';
- el('staff').hidden=me.role==='customer';el('customerForm').hidden=me.role!=='admin';show('dashboard');
+ if(new URLSearchParams(location.search).get('next')==='pilot'&&me.role!=='customer'){location.replace('/pilot');return}el('staff').hidden=me.role==='customer';el('customerForm').hidden=me.role!=='admin';show('dashboard');
  try{
   const customers=await api('/api/customers');propertyOptions=[];el('propertyCustomer').replaceChildren();el('reportProperty').replaceChildren();
   for(const c of customers){const o=document.createElement('option');o.value=c.id;o.textContent=(c.customer_code||'')+' '+c.name;el('propertyCustomer').append(o)}

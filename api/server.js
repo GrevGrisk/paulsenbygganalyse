@@ -62,7 +62,7 @@ const reportPrefix = type => {
   if(t.includes('tak'))return 'TAK-VIS';
   return 'RAP';
 };
-const reportLabel = r => r && ({...r,report_code:reportPrefix(r.report_type)+'-'+String(r.report_number).padStart(4,'0')+'-'+new Date(r.created_at).toLocaleDateString('en-GB',{month:'2-digit',year:'2-digit',timeZone:'Europe/Oslo'}).replace('/','')});
+const reportLabel = r => r && ({...r,report_code:reportPrefix(r.report_type)+'-'+String(r.report_number ?? 'MANGLER').padStart(4,'0')+'-'+new Date(r.created_at).toLocaleDateString('en-GB',{month:'2-digit',year:'2-digit',timeZone:'Europe/Oslo'}).replace('/','')});
 const customerLabel = c => c && ({...c,customer_code:'K-'+String(c.customer_number).padStart(4,'0')});
 const passwordHash = password => {
   const salt = crypto.randomBytes(16).toString('hex');

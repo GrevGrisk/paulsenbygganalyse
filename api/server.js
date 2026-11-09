@@ -12,6 +12,19 @@ const json = (res, status, data) => {
 const fail = (code, message) => Object.assign(new Error(message), { code });
 const id = v => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(v);
 const text = (v, max=200) => typeof v === 'string' && v.trim() && v.length <= max ? v.trim() : null;
+const reportPrefix = type => {
+  const t=(type||'').toLowerCase();
+  if(t.includes('termografi'))return 'TERM';
+  if(t.includes('lekkasje'))return 'LEK';
+  if(t.includes('energi'))return 'ENE';
+  if(t.includes('solcelle'))return 'SOL';
+  if(t.includes('oppmåling')||t.includes('3d'))return 'OPP';
+  if(t.includes('dronefoto'))return 'FOTO';
+  if(t.includes('tak'))return 'TAK';
+  return 'RAP';
+};
+const reportLabel = r => r && ({...r,report_code:reportPrefix(r.report_type)+'-'+String(r.report_number).padStart(4,'0')+'-'+new Date(r.created_at).toLocaleDateString('en-GB',{month:'2-digit',year:'2-digit',timeZone:'Europe/Oslo'}).replace('/','')});
+const customerLabel = c => c && ({...c,customer_code:'K-'+String(c.customer_number).padStart(4,'0')});
 const passwordHash = password => {
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
@@ -164,14 +177,14 @@ async function handler(req,res) {
   if (url.pathname==='/api/customers' && method==='GET') {
     const q=user.role==='customer'
       ? await pool.query('SELECT c.id,c.name FROM customers c JOIN customer_memberships m ON m.customer_id=c.id WHERE m.user_id=$1 ORDER BY c.name',[user.id])
-      : await pool.query('SELECT id,name,organization_number FROM customers ORDER BY name');
-    return json(res,200,q.rows);
+      : await pool.query('SELECT id,name,organization_number,customer_number FROM customers ORDER BY name');
+    return json(res,200,q.rows.map(customerLabel));
   }
   if (url.pathname==='/api/customers' && method==='POST') {
     admin(user); const b=await body(req);
     if (!text(b.name)) throw fail(400,'Mangler kundenavn');
     const q=await pool.query('INSERT INTO customers(name,organization_number) VALUES ($1,$2) RETURNING *',[b.name.trim(),text(b.organization_number,30)]);
-    return json(res,201,q.rows[0]);
+    return json(res,201,customerLabel(q.rows[0]));
   }
   if (url.pathname==='/api/properties' && method==='GET') {
     const customerId=url.searchParams.get('customer_id');
@@ -196,7 +209,7 @@ async function handler(req,res) {
     await propertyAccess(user,propertyId);
     const q=await pool.query(`SELECT id,property_id,title,report_type,status,created_at,updated_at,published_at FROM reports
       WHERE property_id=$1 AND ($2::text <> 'customer' OR status='published') ORDER BY created_at DESC`,[propertyId,user.role]);
-    return json(res,200,q.rows);
+    return json(res,200,q.rows.map(reportLabel));
   }
   if (url.pathname==='/api/reports' && method==='POST') {
     staff(user); const b=await body(req);
@@ -204,13 +217,13 @@ async function handler(req,res) {
     await propertyAccess(user,b.property_id);
     const q=await pool.query(`INSERT INTO reports(property_id,created_by,title,report_type,content)
       VALUES ($1,$2,$3,$4,$5) RETURNING *`,[b.property_id,user.id,b.title.trim(),text(b.report_type,100),JSON.stringify(b.content)]);
-    return json(res,201,q.rows[0]);
+    return json(res,201,reportLabel(q.rows[0]));
   }
   const match=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})(?:\/(submit|approve|publish))?$/i);
   if (match) {
     const reportId=match[1],action=match[2];
     const r=await reportAccess(user,reportId);
-    if (!action && method==='GET') return json(res,200,r);
+    if (!action && method==='GET') return json(res,200,reportLabel(r));
     staff(user);
     if (!action && method==='PATCH') {
       if (r.status!=='draft') throw fail(409,'Kun utkast kan endres');

@@ -12,7 +12,7 @@ button{background:#d22c43;border:0;color:#fff;font:inherit;font-weight:700;borde
 button:disabled{opacity:.5;cursor:wait}.toolbar{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}.tile{background:#102733;border:1px solid #31505d;border-radius:10px;padding:20px}
 a{color:#b3d9e9}ul{padding-left:22px}li{padding:8px 0}small{color:#a8bec8}.error{color:#ffb1b8}.ok{color:#a3dfc3}
-.browser-controls{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:end}.browser-controls label{margin-top:8px}.report-group{margin-top:18px;padding:16px;border:1px solid #31505d;border-radius:8px;background:#0b202b}.report-group h3{margin:0 0 6px}.report-row{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-top:1px solid #31505d;padding:13px 0}.report-row:first-of-type{border-top:0}.report-links{display:flex;gap:15px;flex-wrap:wrap}.report-links a{white-space:nowrap}.muted{font-size:14px}@media(max-width:650px){.browser-controls{grid-template-columns:1fr}}[hidden]{display:none!important}
+.browser-controls{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:end}.browser-controls label{margin-top:8px}.report-group{margin-top:18px;padding:16px;border:1px solid #31505d;border-radius:8px;background:#0b202b}.report-group h3{margin:0 0 6px}.report-row{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-top:1px solid #31505d;padding:13px 0}.report-row:first-of-type{border-top:0}.report-links{display:flex;gap:15px;flex-wrap:wrap}.report-links a{white-space:nowrap}.delete-report{background:transparent;color:#ffb4bd;border:1px solid #bd6674;font-size:13px;padding:6px 10px}.delete-report:hover{background:#632634}.muted{font-size:14px}@media(max-width:650px){.browser-controls{grid-template-columns:1fr}}[hidden]{display:none!important}
 </style></head>
 <body><header><strong>PAULSEN BYGGANALYSE · RAPPORTPORTAL</strong> <a href="/tilbud/admin" style="color:#fff;margin-left:25px">Tilbudsmodul</a> <a href="/tilbud" style="color:#fff;margin-left:16px">Be om tilbud</a></header>
 <main>
@@ -72,9 +72,26 @@ function renderCustomerReports(){
    const links=document.createElement('div');links.className='report-links';
    if(current.role!=='customer'&&r.status==='draft'){const a=document.createElement('a');a.href='/report-editor?id='+encodeURIComponent(r.id);a.textContent='Åpne og rediger';links.append(a)}
    if(current.role!=='customer'){const a=document.createElement('a');a.href='/report-images?id='+encodeURIComponent(r.id);a.textContent='Prosjektbilder';links.append(a)}
+   if(current.role==='admin'){
+    const remove=document.createElement('button');remove.type='button';remove.className='delete-report';remove.textContent='Slett rapport';
+    remove.addEventListener('click',()=>deleteReport(r));links.append(remove);
+   }
    row.append(links);section.append(row);
   }area.append(section);
  }
+}
+async function deleteReport(report){
+ const code=report.report_code||'';
+ const first=confirm('ADVARSEL 1 AV 2\\n\\nDu er i ferd med å slette rapporten: '+code+' – '+report.title+'\\n\\nRapporten og tidligere versjoner vil bli permanent slettet fra databasen. Dette kan ikke angres. Bilder som allerede er lagret i bildearkivet slettes ikke automatisk.\\n\\nVil du fortsette?');
+ if(!first)return;
+ const typed=prompt('ADVARSEL 2 AV 2 – PERMANENT SLETTING\\n\\nSkriv rapportnummeret nøyaktig for å bekrefte sletting:\\n'+code+'\\n\\nTrykk Avbryt for å beholde rapporten.');
+ if(typed===null)return;
+ if(typed.trim()!==code){alert('Rapportnummeret stemmer ikke. Ingen rapport ble slettet.');return}
+ try{
+  const response=await fetch('/api/reports/'+encodeURIComponent(report.id),{method:'DELETE',credentials:'same-origin',headers:{'X-Confirm-Report-Code':code}});
+  const result=await response.json();if(!response.ok)throw Error(result.error||'Sletting feilet');
+  await load();alert('Rapporten er permanent slettet.');
+ }catch(e){alert('Kunne ikke slette rapporten: '+e.message)}
 }
 el('customerSearch').addEventListener('input',updateCustomerOptions);
 el('customerSelect').addEventListener('change',e=>{selectedCustomerId=e.target.value;renderCustomerReports()});

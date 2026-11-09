@@ -39,7 +39,21 @@ function render(){
   if(pictures.length){const gallery=document.createElement('div');gallery.className='media';pictures.forEach(p=>{const figure=document.createElement('figure');figure.style.margin='0';const image=document.createElement('img');image.src=p.src;image.alt=p.role;image.onclick=()=>{$('large').src=p.src;$('viewer').showModal()};figure.append(image);const caption=document.createElement('figcaption');caption.textContent=p.role+(p.caption?' – '+p.caption:'');figure.append(caption);gallery.append(figure)});div.append(gallery)}
   const edit=document.createElement('button');edit.type='button';edit.textContent='Rediger funn';edit.className='secondary';
   edit.onclick=()=>{['category','priority','location','type','description','action'].forEach(id=>$(id).value=f[id]||'');$('tempMin').value=f.temperatures?.min??'';$('tempAvg').value=f.temperatures?.avg??'';$('tempMax').value=f.temperatures?.max??'';$('overviewFindingCaption').value=f.photos?.overview?.caption||'';$('overviewFindingPhoto').value='';$('thermalOverviewFindingCaption').value=f.photos?.thermalOverview?.caption||'';$('thermalOverviewFindingPhoto').value='';$('detailFindingCaption').value=f.photos?.detail?.caption||'';$('detailFindingPhoto').value='';$('thermalDetailFindingCaption').value=f.photos?.thermalDetail?.caption||'';$('thermalDetailFindingPhoto').value='';$('add').dataset.editIndex=String(index);$('add').textContent='Lagre endringer';$('category').scrollIntoView({behavior:'smooth',block:'center'});};
-  div.append(edit);$('findings').append(div);
+  div.append(edit);
+  const remove=document.createElement('button');remove.type='button';remove.textContent='Slett funn';remove.className='secondary';remove.style.marginLeft='10px';remove.style.background='#792c39';remove.style.color='#fff';
+  remove.onclick=()=>{
+   const number=String(index+1).padStart(2,'0');
+   if(!confirm('Vil du slette funn '+number+' – '+(f.type||'Observasjon')+'?\\n\\nFunnet fjernes fra rapporten. Bilder i bildearkivet slettes ikke automatisk.'))return;
+   if($('add').dataset.editIndex!==undefined){
+    const editing=Number($('add').dataset.editIndex);
+    if(editing===index){delete $('add').dataset.editIndex;$('add').textContent='Legg til funn';}
+    else if(editing>index)$('add').dataset.editIndex=String(editing-1);
+   }
+   data.findings.splice(index,1);
+   render();
+   queueServerSave();
+  };
+  div.append(remove);$('findings').append(div);
  });
  if(!data.findings.length)$('findings').textContent='Ingen funn registrert ennå.';
 }

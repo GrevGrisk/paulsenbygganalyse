@@ -42,13 +42,18 @@ const li=(parent,label)=>{const node=document.createElement('li');node.textConte
 let current;let propertyOptions=[];let customerRecords=[];let selectedCustomerId='';
 function updateCustomerOptions(){
  const search=el('customerSearch').value.trim().toLocaleLowerCase('nb');
- const select=el('customerSelect');const old=selectedCustomerId;select.replaceChildren();
+ const select=el('customerSelect');const previous=selectedCustomerId;select.replaceChildren();
  const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Velg kunde …';select.append(placeholder);
- for(const c of customerRecords.filter(c=>(c.name+' '+(c.customer_code||'')).toLocaleLowerCase('nb').includes(search))){
-  const o=document.createElement('option');o.value=c.id;o.textContent=(c.customer_code||'')+' · '+c.name;select.append(o);
+ const matches=customerRecords.filter(c=>(c.name+' '+(c.customer_code||'')).toLocaleLowerCase('nb').includes(search));
+ for(const c of matches){const o=document.createElement('option');o.value=c.id;o.textContent=(c.customer_code||'')+' · '+c.name;select.append(o)}
+ if(search){
+  selectedCustomerId=matches.some(c=>c.id===previous)?previous:(matches[0]?.id||'');
+ }else{
+  selectedCustomerId=customerRecords.some(c=>c.id===previous)?previous:'';
  }
- if([...select.options].some(o=>o.value===old))select.value=old;else{selectedCustomerId='';select.value=''}
+ select.value=selectedCustomerId;
  renderCustomerReports();
+ if(search&&!matches.length)el('customerReports').textContent='Ingen kunder funnet. Prøv et annet søk.';
 }
 function renderCustomerReports(){
  const area=el('customerReports');area.replaceChildren();const c=customerRecords.find(x=>x.id===selectedCustomerId);

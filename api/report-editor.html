@@ -93,7 +93,7 @@ $('add').onclick=async()=>{
   if(editIndex>=0)data.findings[editIndex]=f;else data.findings.push(f);
   delete button.dataset.editIndex;button.textContent='Legg til funn';
   ['location','type','description','action','tempMin','tempAvg','tempMax'].forEach(id=>$(id).value='');
-  ["overviewFindingPhoto","overviewFindingCaption","thermalOverviewFindingPhoto","thermalOverviewFindingCaption","detailFindingPhoto","detailFindingCaption","thermalDetailFindingPhoto","thermalDetailFindingCaption"].forEach(id=>$(id).value='');save();render();
+  ["overviewFindingPhoto","overviewFindingCaption","thermalOverviewFindingPhoto","thermalOverviewFindingCaption","detailFindingPhoto","detailFindingCaption","thermalDetailFindingPhoto","thermalDetailFindingCaption"].forEach(id=>$(id).value='');save();render();await saveNow();
  }catch(e){alert('Kunne ikke lagre funnet: '+e.message)}
  finally{button.disabled=false}
 };

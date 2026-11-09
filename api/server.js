@@ -175,7 +175,7 @@ async function handler(req,res) {
   if (url.pathname==='/api/quote-requests' && method==='POST') {
     const b=await body(req);
     const allowed=['TAK-VIS','TAK-TMO','SOL','ENG','OPPM','MOD'];
-    if(!['private','business'].includes(b.customer_type)||!text(b.customer_name)||!text(b.email,254)||!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(b.email)||!text(b.property_address,250)||!Array.isArray(b.services)||!b.services.length||b.services.length>allowed.length||new Set(b.services).size!==b.services.length||!b.services.every(v=>allowed.includes(v)))throw fail(400,'Kontroller obligatoriske opplysninger');
+    if(!['private','business'].includes(b.customer_type)||!text(b.customer_name)||!text(b.email,254)||!/^[^\s@]+@[^\s@]+\\.[^\s@]+$/.test(b.email)||!text(b.property_address,250)||!Array.isArray(b.services)||!b.services.length||b.services.length>allowed.length||new Set(b.services).size!==b.services.length||!b.services.every(v=>allowed.includes(v)))throw fail(400,'Kontroller obligatoriske opplysninger');
     const fields=['phone','organization_number','postal_code','municipality','gnr','bnr','building_type','property_notes'];
     const lengths=[30,30,10,100,20,20,100,4000];
     const extra=fields.map((key,i)=>b[key]===undefined||b[key]===''?null:text(b[key],lengths[i]));
@@ -185,8 +185,8 @@ async function handler(req,res) {
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,[token,b.customer_type,b.customer_name.trim(),b.email.trim(),b.property_address.trim(),JSON.stringify(b.services),...extra,b.customer_type==='private'?'incl':'excl']);
     return json(res,201,{ok:true});
   }
-  const quotePublic=url.pathname.match(/^\\/api\\/quote\\/([a-f0-9]{48})$/);
-  const quoteRespond=url.pathname.match(/^\\/api\\/quote\\/([a-f0-9]{48})\\/respond$/);
+  const quotePublic=url.pathname.match(/^\/api\/quote\/([a-f0-9]{48})$/);
+  const quoteRespond=url.pathname.match(/^\/api\/quote\/([a-f0-9]{48})\/respond$/);
   if(quotePublic && method==='GET'){
     const q=await pool.query("SELECT customer_name,property_address,services,line_items,discount_percent,price_display,offer_notes,valid_until,status,public_token FROM quote_requests WHERE public_token=$1 AND status IN ('sent','accepted','declined')",[quotePublic[1]]);
     if(!q.rowCount)throw fail(404,'Tilbud ikke funnet');
@@ -232,11 +232,11 @@ async function handler(req,res) {
     const q=await pool.query("SELECT id,customer_type,customer_name,email,phone,organization_number,property_address,postal_code,municipality,gnr,bnr,building_type,property_notes,services,status,line_items,discount_percent,price_display,offer_notes,valid_until,public_token,created_at,report_id FROM quote_requests ORDER BY created_at DESC LIMIT 200");
     return json(res,200,q.rows);
   }
-  const quoteEdit=url.pathname.match(/^\\/api\\/quote-requests\\/([0-9a-f-]{36})$/i);
+  const quoteEdit=url.pathname.match(/^\/api\/quote-requests\/([0-9a-f-]{36})$/i);
   if(quoteEdit && method==='PATCH'){
     staff(user);const b=await body(req);
     if(!Array.isArray(b.line_items)||b.line_items.length>30||!b.line_items.every(x=>text(x.description,200)&&Number.isFinite(x.price)&&x.price>=0&&x.price<=10000000)||!Number.isFinite(b.discount_percent)||b.discount_percent<0||b.discount_percent>100||!['incl','excl'].includes(b.price_display)||!['priced','sent'].includes(b.status))throw fail(400,'Ugyldig tilbudspris');
-    if(b.valid_until && !/^\\d{4}-\\d{2}-\\d{2}$/.test(b.valid_until))throw fail(400,'Ugyldig gyldighetsdato');
+    if(b.valid_until && !/^\d{4}-\d{2}-\d{2}$/.test(b.valid_until))throw fail(400,'Ugyldig gyldighetsdato');
     const q=await pool.query(`UPDATE quote_requests SET line_items=$2,discount_percent=$3,price_display=$4,offer_notes=$5,valid_until=$6,status=$7,sent_at=CASE WHEN $7='sent' THEN now() ELSE sent_at END,updated_at=now()
     WHERE id=$1 AND status IN ('new','priced','sent') RETURNING id,public_token,status`,[quoteEdit[1],JSON.stringify(b.line_items),b.discount_percent,b.price_display,text(b.offer_notes,4000),b.valid_until||null,b.status]);
     if(!q.rowCount)throw fail(409,'Tilbudet kan ikke endres');

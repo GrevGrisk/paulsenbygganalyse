@@ -42,12 +42,12 @@ async function load(){
  el('staff').hidden=me.role==='customer';el('customerForm').hidden=me.role!=='admin';show('dashboard');
  try{
   const customers=await api('/api/customers');propertyOptions=[];el('propertyCustomer').replaceChildren();el('reportProperty').replaceChildren();
-  for(const c of customers){const o=document.createElement('option');o.value=c.id;o.textContent=c.name;el('propertyCustomer').append(o)}
+  for(const c of customers){const o=document.createElement('option');o.value=c.id;o.textContent=(c.customer_code||'')+' '+c.name;el('propertyCustomer').append(o)}
   el('customers').replaceChildren();el('properties').replaceChildren();el('reports').replaceChildren();
   if(!customers.length)li('customers','Ingen kunder registrert');
-  for(const c of customers){li('customers',c.name);const properties=await api('/api/properties?customer_id='+encodeURIComponent(c.id));
+  for(const c of customers){li('customers',(c.customer_code||'')+' · '+c.name);const properties=await api('/api/properties?customer_id='+encodeURIComponent(c.id));
    for(const p of properties){propertyOptions.push(p);const option=document.createElement('option');option.value=p.id;option.textContent=c.name+' – '+p.name;el('reportProperty').append(option);li('properties',p.name+' – '+p.address);const reports=await api('/api/reports?property_id='+encodeURIComponent(p.id));
-    for(const r of reports){const item=document.createElement('li');item.textContent=r.title+' ('+r.status+')';if(me.role!=='customer'&&r.status==='draft'){const a=document.createElement('a');a.href='/report-editor?id='+encodeURIComponent(r.id);a.textContent=' Åpne og rediger';item.append(a)}el('reports').append(item)}
+    for(const r of reports){const item=document.createElement('li');item.textContent=(r.report_code||'')+' · '+r.title+' ('+r.status+')';if(me.role!=='customer'&&r.status==='draft'){const a=document.createElement('a');a.href='/report-editor?id='+encodeURIComponent(r.id);a.textContent=' Åpne og rediger';item.append(a)}el('reports').append(item)}
    }
   }
   if(!el('properties').children.length)li('properties','Ingen eiendommer registrert');

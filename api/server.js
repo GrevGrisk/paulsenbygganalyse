@@ -2,6 +2,45 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import { Pool } from 'pg';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+
+
+const imageBucket=process.env.S3_BUCKET;
+const imageClient=imageBucket && process.env.S3_ENDPOINT && process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY
+  ? new S3Client({region:process.env.S3_REGION||'auto',endpoint:process.env.S3_ENDPOINT,forcePathStyle:false,credentials:{accessKeyId:process.env.S3_ACCESS_KEY_ID,secretAccessKey:process.env.S3_SECRET_ACCESS_KEY}})
+  : null;
+const imagePath=(reportId,key)=>'/api/reports/'+reportId+'/images/'+key;
+const imageKey=(reportId)=>'reports/'+reportId+'/'+crypto.randomUUID()+'.jpg';
+async function storeImage(reportId,bytes){
+  if(!imageClient)throw fail(503,'Bildelagring er ikke konfigurert');
+  if(bytes.length<1||bytes.length>8*1024*1024)throw fail(413,'Bildet er for stort (maks 8 MB)');
+  const key=imageKey(reportId);
+  await imageClient.send(new PutObjectCommand({Bucket:imageBucket,Key:key,Body:bytes,ContentType:'image/jpeg',CacheControl:'private, max-age=3600'}));
+  return imagePath(reportId,key.slice(('reports/'+reportId+'/').length,-4));
+}
+async function moveEmbeddedImages(reportId,content){
+  const walk=async value=>{
+    if(typeof value==='string'&&value.startsWith('data:image/')){
+      const match=/^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(value);
+      if(!match)throw fail(400,'Ugyldig bildeformat');
+      if(!imageClient)throw fail(503,'Bildelagring er ikke konfigurert');
+      const bytes=Buffer.from(match[2],'base64');
+      if(bytes.length>8*1024*1024)throw fail(413,'Bildet er for stort');
+      const type=match[1]==='jpg'?'jpeg':match[1];
+      const key='reports/'+reportId+'/'+crypto.randomUUID()+'.'+(type==='jpeg'?'jpg':type);
+      await imageClient.send(new PutObjectCommand({Bucket:imageBucket,Key:key,Body:bytes,ContentType:'image/'+type}));
+      return imagePath(reportId,key.slice(('reports/'+reportId+'/').length).replace(/\.(jpg|png|webp)$/,''));
+    }
+    if(Array.isArray(value))return Promise.all(value.map(walk));
+    if(value&&typeof value==='object'){
+      const out={};
+      for(const [key,v] of Object.entries(value))out[key]=await walk(v);
+      return out;
+    }
+    return value;
+  };
+  return walk(content);
+}
 
 const port = Number(process.env.PORT || 3000);
 const pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env.DATABASE_URL, max: 8 }) : null;
@@ -288,6 +327,37 @@ async function handler(req,res) {
       VALUES ($1,$2,$3,$4,$5) RETURNING *`,[b.property_id,user.id,b.title.trim(),text(b.report_type,100),JSON.stringify(b.content)]);
     return json(res,201,reportLabel(q.rows[0]));
   }
+
+  const imageMatch=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})\/images\/([0-9a-f-]{36})$/i);
+  if(imageMatch && (method==='GET'||method==='POST')){
+    const reportId=imageMatch[1],imageId=imageMatch[2];
+    const report=await reportAccess(user,reportId);
+    if(method==='POST')throw fail(405,'Bruk bildeopplasting uten bilde-ID');
+    if(!imageClient)throw fail(503,'Bildelagring er ikke konfigurert');
+    const prefix='reports/'+reportId+'/'+imageId;
+    let object;
+    for(const extension of ['.jpg','.png','.webp']){
+      try{object=await imageClient.send(new GetObjectCommand({Bucket:imageBucket,Key:prefix+extension}));break}
+      catch(e){if(e.name!=='NoSuchKey'&&e.name!=='NotFound')throw e}
+    }
+    if(!object)throw fail(404,'Bilde ikke funnet');
+    res.writeHead(200,{'Content-Type':object.ContentType||'image/jpeg','Cache-Control':'private, max-age=3600','X-Content-Type-Options':'nosniff'});
+    for await(const part of object.Body)res.write(part);
+    return res.end();
+  }
+  const imageUpload=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})\/images$/i);
+  if(imageUpload && method==='POST'){
+    staff(user);const reportId=imageUpload[1];
+    const report=await reportAccess(user,reportId);
+    if(report.status!=='draft')throw fail(409,'Rapporten er låst');
+    checkOrigin(req);
+    if(req.headers['content-type']!=='image/jpeg')throw fail(415,'Kun JPEG-bilder støttes');
+    let size=0;const parts=[];
+    for await(const part of req){size+=part.length;if(size>8*1024*1024)throw fail(413,'Bildet er for stort (maks 8 MB)');parts.push(part)}
+    const bytes=Buffer.concat(parts);
+    if(bytes.length<4||bytes[0]!==0xff||bytes[1]!==0xd8)throw fail(400,'Ugyldig JPEG-bilde');
+    return json(res,201,{url:await storeImage(reportId,bytes)});
+  }
   const match=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})(?:\/(submit|approve|publish))?$/i);
   if (match) {
     const reportId=match[1],action=match[2];
@@ -299,7 +369,7 @@ async function handler(req,res) {
       const b=await body(req);
       if (!text(b.title,300)||!b.content||typeof b.content!=='object'||Array.isArray(b.content)) throw fail(400,'Ugyldig rapport');
       const q=await pool.query(`UPDATE reports SET title=$2,content=$3,updated_at=now()
-        WHERE id=$1 AND status='draft' RETURNING *`,[reportId,b.title.trim(),JSON.stringify(b.content)]);
+        WHERE id=$1 AND status='draft' RETURNING *`,[reportId,b.title.trim(),JSON.stringify(await moveEmbeddedImages(reportId,b.content))]);
       if (!q.rowCount) throw fail(409,'Rapportstatus er endret');
       return json(res,200,q.rows[0]);
     }

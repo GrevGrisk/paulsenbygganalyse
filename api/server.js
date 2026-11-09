@@ -350,7 +350,7 @@ async function handler(req,res) {
     staff(user);const reportId=imageUpload[1];
     const report=await reportAccess(user,reportId);
     if(report.status!=='draft')throw fail(409,'Rapporten er låst');
-    checkOrigin(req);
+    guardOrigin(req);
     if(req.headers['content-type']!=='image/jpeg')throw fail(415,'Kun JPEG-bilder støttes');
     let size=0;const parts=[];
     for await(const part of req){size+=part.length;if(size>8*1024*1024)throw fail(413,'Bildet er for stort (maks 8 MB)');parts.push(part)}

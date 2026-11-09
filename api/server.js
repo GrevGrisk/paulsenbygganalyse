@@ -114,6 +114,15 @@ async function handler(req,res) {
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"});
     return res.end(page);
   }
+  if (url.pathname==='/report-preview' && req.method==='GET') {
+    const user=await currentUser(req);staff(user);
+    const reportId=url.searchParams.get('id');
+    if (!id(reportId)) throw fail(400,'Ugyldig rapport-ID');
+    await reportAccess(user,reportId);
+    const page=await fs.readFile(new URL('./report-preview.html',import.meta.url));
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
+    return res.end(page);
+  }
   if (url.pathname==='/report-editor' && req.method==='GET') {
     if (!pool) throw fail(503,'Database ikke konfigurert');
     const user=await currentUser(req);staff(user);

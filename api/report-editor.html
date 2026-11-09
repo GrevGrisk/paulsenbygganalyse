@@ -53,7 +53,7 @@ function render(){
     };
     figure.append(removePhoto);gallery.append(figure)});div.append(gallery)}
   const edit=document.createElement('button');edit.type='button';edit.textContent='Rediger funn';edit.className='secondary';
-  edit.onclick=()=>{['category','priority','location','type','description','action'].forEach(id=>$(id).value=f[id]||'');$('tempMin').value=f.temperatures?.min??'';$('tempAvg').value=f.temperatures?.avg??'';$('tempMax').value=f.temperatures?.max??'';updateFindingTemperatures();$('overviewFindingCaption').value=f.photos?.overview?.caption||'';$('overviewFindingPhoto').value='';$('thermalOverviewFindingCaption').value=f.photos?.thermalOverview?.caption||'';$('thermalOverviewFindingPhoto').value='';$('detailFindingCaption').value=f.photos?.detail?.caption||'';$('detailFindingPhoto').value='';$('thermalDetailFindingCaption').value=f.photos?.thermalDetail?.caption||'';$('thermalDetailFindingPhoto').value='';$('add').dataset.editIndex=String(index);$('add').textContent='Lagre endringer';$('category').scrollIntoView({behavior:'smooth',block:'center'});};
+  edit.onclick=()=>{['category','priority','location','type','description','action'].forEach(id=>$(id).value=f[id]||'');$('tempMin').value=f.temperatures?.min??'';$('tempAvg').value=f.temperatures?.avg??'';$('tempMax').value=f.temperatures?.max??'';updateFindingTemperatures();$('overviewFindingCaption').value=f.photos?.overview?.caption||'';$('overviewFindingPhoto').value='';$('thermalOverviewFindingCaption').value=f.photos?.thermalOverview?.caption||'';$('thermalOverviewFindingPhoto').value='';$('detailFindingCaption').value=f.photos?.detail?.caption||'';$('detailFindingPhoto').value='';$('thermalDetailFindingCaption').value=f.photos?.thermalDetail?.caption||'';$('thermalDetailFindingPhoto').value='';showFindingPhotoPreviews(f);$('add').dataset.editIndex=String(index);$('add').textContent='Lagre endringer';$('category').scrollIntoView({behavior:'smooth',block:'center'});};
   div.append(edit);
   const remove=document.createElement('button');remove.type='button';remove.textContent='Slett funn';remove.className='secondary';remove.style.marginLeft='10px';remove.style.background='#792c39';remove.style.color='#fff';
   remove.onclick=()=>{
@@ -71,6 +71,21 @@ function render(){
   div.append(remove);$('findings').append(div);
  });
  if(!data.findings.length)$('findings').textContent='Ingen funn registrert ennå.';
+}
+function showFindingPhotoPreviews(f){
+ const slots=[['overview','overviewFindingPhoto'],['thermalOverview','thermalOverviewFindingPhoto'],['detail','detailFindingPhoto'],['thermalDetail','thermalDetailFindingPhoto']];
+ slots.forEach(([key,inputId],i)=>{
+  const input=$(inputId);
+  let preview=document.getElementById(inputId+'SavedPreview');
+  if(!preview){preview=document.createElement('div');preview.id=inputId+'SavedPreview';preview.style.marginTop='10px';input.insertAdjacentElement('afterend',preview);}
+  preview.replaceChildren();
+  const src=f?.photos?.[key]?.src||(!f?.photos&&f?.images?.[i<2?i:99])||null;
+  if(!src)return;
+  const image=document.createElement('img');image.src=src;image.alt='Lagret bilde';image.style.cssText='max-width:100%;max-height:190px;object-fit:contain;border-radius:6px;cursor:zoom-in;display:block';
+  image.onclick=()=>{$('large').src=src;$('viewer').showModal()};
+  const caption=document.createElement('div');caption.className='hint';caption.textContent='Lagret bilde – velg en ny fil for å erstatte';caption.style.marginTop='5px';
+  preview.append(image,caption);
+ });
 }
 function updateFindingTemperatures(){
  const min=$('tempMin').value===''?null:Number($('tempMin').value);
@@ -104,7 +119,7 @@ $('add').onclick=async()=>{
   if(editIndex>=0)data.findings[editIndex]=f;else data.findings.push(f);
   delete button.dataset.editIndex;button.textContent='Legg til funn';
   ['location','type','description','action','tempMin','tempAvg','tempMax','tempDeviation'].forEach(id=>$(id).value='');
-  ["overviewFindingPhoto","overviewFindingCaption","thermalOverviewFindingPhoto","thermalOverviewFindingCaption","detailFindingPhoto","detailFindingCaption","thermalDetailFindingPhoto","thermalDetailFindingCaption"].forEach(id=>$(id).value='');save();render();await saveNow();
+  ["overviewFindingPhoto","overviewFindingCaption","thermalOverviewFindingPhoto","thermalOverviewFindingCaption","detailFindingPhoto","detailFindingCaption","thermalDetailFindingPhoto","thermalDetailFindingCaption"].forEach(id=>$(id).value='');save();render();showFindingPhotoPreviews(null);await saveNow();
  }catch(e){alert('Kunne ikke lagre funnet: '+e.message)}
  finally{button.disabled=false}
 };

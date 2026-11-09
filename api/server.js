@@ -243,6 +243,17 @@ async function handler(req,res) {
     const token=crypto.randomBytes(24).toString('hex');
     await pool.query(`INSERT INTO quote_requests(public_token,customer_type,customer_name,email,property_address,services,phone,organization_number,postal_code,municipality,gnr,bnr,building_type,property_notes,price_display)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,[token,b.customer_type,b.customer_name.trim(),b.email.trim(),b.property_address.trim(),JSON.stringify(b.services),...extra,b.customer_type==='private'?'incl':'excl']);
+    // Notification is best-effort: the request is already saved in the portal.
+    if(process.env.RESEND_API_KEY && process.env.QUOTE_NOTIFY_FROM){
+      try{
+        const response=await fetch('https://api.resend.com/emails',{
+          method:'POST',signal:AbortSignal.timeout(7000),
+          headers:{'Authorization':'Bearer '+process.env.RESEND_API_KEY,'Content-Type':'application/json'},
+          body:JSON.stringify({from:process.env.QUOTE_NOTIFY_FROM,to:['post@paulsenbygganalyse.no'],subject:'Ny tilbudsforespørsel – '+b.customer_name.trim().slice(0,100),text:['Ny forespørsel er registrert i pilotportalen.','', 'Kunde: '+b.customer_name.trim(),'E-post: '+b.email.trim(),'Adresse: '+b.property_address.trim(),'Tjenester: '+b.services.join(', '),'', 'Åpne: https://portal.paulsenbygganalyse.no/tilbud/admin'].join('\\n')})
+        });
+        if(!response.ok)console.error('Quote notification failed:',response.status,(await response.text()).slice(0,300));
+      }catch(error){console.error('Quote notification failed:',error.message);}
+    }else console.warn('Quote email notification not configured: RESEND_API_KEY / QUOTE_NOTIFY_FROM');
     return json(res,201,{ok:true});
   }
   const quotePublic=url.pathname.match(/^\/api\/quote\/([a-f0-9]{48})$/);

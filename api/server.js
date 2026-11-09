@@ -162,13 +162,13 @@ async function handler(req,res) {
     res.writeHead(204); return res.end();
   }
   const url=new URL(req.url,'http://localhost');
-  if(['/pilot','/pilot/preflight','/pilot/registre'].includes(url.pathname)&&req.method==='GET'){
+  if(['/pilot','/pilot/preflight','/pilot/registre','/pilot/bilder'].includes(url.pathname)&&req.method==='GET'){
     let user;
     try{user=await currentUser(req);staff(user)}catch(e){
       if(e.status===401){res.writeHead(302,{Location:'/?next=pilot','Cache-Control':'no-store'});return res.end()}
       throw e;
     }
-    const file=url.pathname==='/pilot'?'pilot-menu.html':url.pathname==='/pilot/preflight'?'pilot-preflight.html':'pilot-registre.html';
+    const file=url.pathname==='/pilot'?'pilot-menu.html':url.pathname==='/pilot/preflight'?'pilot-preflight.html':url.pathname==='/pilot/bilder'?'pilot-images.html':'pilot-registre.html';
     const page=await fs.readFile(new URL('./'+file,import.meta.url));
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
     return res.end(page);

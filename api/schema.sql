@@ -89,3 +89,16 @@ CREATE TABLE IF NOT EXISTS report_files (
 -- 2. Ansatte skal ikke kunne tildele seg selv roller eller kundetilganger.
 -- 3. Alle endringer, godkjenninger og publiseringer autoriseres pa serveren.
 -- 4. Filer lagres privat; nedlasting krever samme tilgangssjekk som rapporten.
+
+-- Stabile nummer, også for eksisterende kunder og rapporter.
+CREATE SEQUENCE IF NOT EXISTS customer_number_seq;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS customer_number bigint;
+ALTER TABLE customers ALTER COLUMN customer_number SET DEFAULT nextval('customer_number_seq');
+UPDATE customers SET customer_number=nextval('customer_number_seq') WHERE customer_number IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS customers_number_unique ON customers(customer_number);
+
+CREATE SEQUENCE IF NOT EXISTS report_number_seq;
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS report_number bigint;
+ALTER TABLE reports ALTER COLUMN report_number SET DEFAULT nextval('report_number_seq');
+UPDATE reports SET report_number=nextval('report_number_seq') WHERE report_number IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS reports_number_unique ON reports(report_number);

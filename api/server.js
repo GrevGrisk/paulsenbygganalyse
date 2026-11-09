@@ -354,11 +354,18 @@ async function handler(req,res) {
     const report=await reportAccess(user,reportId);
     if(method==='POST')throw fail(405,'Bruk bildeopplasting uten bilde-ID');
     if(!imageClient)throw fail(503,'Bildelagring er ikke konfigurert');
-    const prefix=imageId.includes('-')&&!/^[0-9a-f-]{36}$/i.test(imageId)?'projects/'+reportLabel(report).report_code+'/'+imageId:'reports/'+reportId+'/'+imageId;
+    const projectCode=reportLabel(report).report_code;
+    const isNamedImage=imageId.includes('-')&&!/^[0-9a-f-]{36}$/i.test(imageId);
+    const prefixes=isNamedImage
+      ?['projects/'+projectCode+'/'+imageId,'projects/'+projectCode.replace(/-\\d{4}-/,'-undefined-')+'/'+imageId]
+      :['reports/'+reportId+'/'+imageId];
     let object;
-    for(const extension of ['.jpg','.png','.webp']){
-      try{object=await imageClient.send(new GetObjectCommand({Bucket:imageBucket,Key:prefix+extension}));break}
-      catch(e){if(e.name!=='NoSuchKey'&&e.name!=='NotFound')throw e}
+    for(const prefix of [...new Set(prefixes)]){
+      for(const extension of ['.jpg','.png','.webp']){
+        try{object=await imageClient.send(new GetObjectCommand({Bucket:imageBucket,Key:prefix+extension}));break}
+        catch(e){if(e.name!=='NoSuchKey'&&e.name!=='NotFound')throw e}
+      }
+      if(object)break;
     }
     if(!object)throw fail(404,'Bilde ikke funnet');
     res.writeHead(200,{'Content-Type':object.ContentType||'image/jpeg','Cache-Control':'private, max-age=3600','X-Content-Type-Options':'nosniff'});

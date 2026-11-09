@@ -83,6 +83,17 @@ async function init() {
     expires_at timestamptz NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now()
   )`);
+  // One-time administrator bootstrap. Remove ADMIN_PASSWORD from Railway immediately after success.
+  if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+    const email=process.env.ADMIN_EMAIL.trim().toLowerCase();
+    const password=process.env.ADMIN_PASSWORD;
+    if (!email.includes('@') || password.length < 16) throw new Error('Ugyldig administratoroppsett');
+    const result=await pool.query(
+      "INSERT INTO portal_users(email,password_hash,full_name,role) VALUES($1,$2,$3,'admin') ON CONFLICT(email) DO NOTHING RETURNING id",
+      [email,passwordHash(password),process.env.ADMIN_NAME?.trim() || 'Administrator']
+    );
+    console.log(result.rowCount ? 'Administrator opprettet' : 'Administratorkonto finnes allerede');
+  }
   console.log('Databaseskjema kontrollert');
 }
 async function handler(req,res) {

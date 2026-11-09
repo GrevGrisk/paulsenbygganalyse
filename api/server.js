@@ -127,6 +127,22 @@ async function handler(req,res) {
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"});
     return res.end(page);
   }
+  if ((url.pathname==='/tilbud' || url.pathname==='/be-om-tilbud') && req.method==='GET') {
+    const page=await fs.readFile(new URL('./quote-request.html',import.meta.url));
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"});
+    return res.end(page);
+  }
+  if (url.pathname==='/tilbud/admin' && req.method==='GET') {
+    const user=await currentUser(req);staff(user);
+    const page=await fs.readFile(new URL('./quote-admin.html',import.meta.url));
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"});
+    return res.end(page);
+  }
+  if (url.pathname==='/tilbud/svar' && req.method==='GET') {
+    const page=await fs.readFile(new URL('./quote-accept.html',import.meta.url));
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"});
+    return res.end(page);
+  }
   if (url.pathname==='/report-preview' && req.method==='GET') {
     const user=await currentUser(req);staff(user);
     const reportId=url.searchParams.get('id');
@@ -156,6 +172,43 @@ async function handler(req,res) {
   if (!url.pathname.startsWith('/api/')) throw fail(404,'Ikke funnet');
   guardOrigin(req);
   const method=req.method;
+  if (url.pathname==='/api/quote-requests' && method==='POST') {
+    const b=await body(req);
+    const allowed=['TAK-VIS','TAK-TMO','SOL','ENG','OPPM','MOD'];
+    if(!['private','business'].includes(b.customer_type)||!text(b.customer_name)||!text(b.email,254)||!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(b.email)||!text(b.property_address,250)||!Array.isArray(b.services)||!b.services.length||b.services.length>allowed.length||new Set(b.services).size!==b.services.length||!b.services.every(v=>allowed.includes(v)))throw fail(400,'Kontroller obligatoriske opplysninger');
+    const fields=['phone','organization_number','postal_code','municipality','gnr','bnr','building_type','property_notes'];
+    const lengths=[30,30,10,100,20,20,100,4000];
+    const extra=fields.map((key,i)=>b[key]===undefined||b[key]===''?null:text(b[key],lengths[i]));
+    if(fields.some((key,i)=>b[key]!==undefined&&b[key]!==''&&!extra[i]))throw fail(400,'Et felt er for langt');
+    const token=crypto.randomBytes(24).toString('hex');
+    await pool.query(`INSERT INTO quote_requests(public_token,customer_type,customer_name,email,property_address,services,phone,organization_number,postal_code,municipality,gnr,bnr,building_type,property_notes,price_display)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,[token,b.customer_type,b.customer_name.trim(),b.email.trim(),b.property_address.trim(),JSON.stringify(b.services),...extra,b.customer_type==='private'?'incl':'excl']);
+    return json(res,201,{ok:true});
+  }
+  const quotePublic=url.pathname.match(/^\\/api\\/quote\\/([a-f0-9]{48})$/);
+  const quoteRespond=url.pathname.match(/^\\/api\\/quote\\/([a-f0-9]{48})\\/respond$/);
+  if(quotePublic && method==='GET'){
+    const q=await pool.query("SELECT customer_name,property_address,services,line_items,discount_percent,price_display,offer_notes,valid_until,status,public_token FROM quote_requests WHERE public_token=$1 AND status IN ('sent','accepted','declined')",[quotePublic[1]]);
+    if(!q.rowCount)throw fail(404,'Tilbud ikke funnet');
+    return json(res,200,q.rows[0]);
+  }
+  if(quoteRespond && method==='POST'){
+    const b=await body(req);if(!['accepted','declined'].includes(b.action))throw fail(400,'Ugyldig svar');
+    const result=await transaction(async c=>{
+      const q=await c.query("SELECT * FROM quote_requests WHERE public_token=$1 FOR UPDATE",[quoteRespond[1]]);
+      const offer=q.rows[0];
+      if(!offer||offer.status!=='sent')throw fail(409,'Tilbudet er ikke tilgjengelig for svar');
+      if(offer.valid_until && new Date(offer.valid_until+'T23:59:59Z')<new Date())throw fail(409,'Tilbudet er utløpt');
+      if(b.action==='declined'){await c.query("UPDATE quote_requests SET status='declined',updated_at=now() WHERE id=$1",[offer.id]);return {status:'declined'};}
+      const cust=await c.query('INSERT INTO customers(name,organization_number) VALUES($1,$2) RETURNING id',[offer.customer_name,offer.organization_number]);
+      const prop=await c.query('INSERT INTO properties(customer_id,name,address,postal_code,municipality,cadastral_reference) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',[cust.rows[0].id,offer.property_address,offer.property_address,offer.postal_code,offer.municipality,[offer.gnr,offer.bnr].filter(Boolean).join('/')]);
+      const report=await c.query(`INSERT INTO reports(property_id,created_by,title,report_type,content)
+        VALUES($1,(SELECT id FROM portal_users WHERE role='admin' AND is_active=true ORDER BY created_at LIMIT 1),$2,$3,$4) RETURNING id`,[prop.rows[0].id,'Inspeksjon – '+offer.property_address,offer.services.length===1?({'TAK-VIS':'Visuell takinspeksjon','TAK-TMO':'Takinspeksjon – termografi','SOL':'Solcelleinspeksjon','ENG':'Energiscreening','OPPM':'Oppmåling','MOD':'Modellering'}[offer.services[0]]):'Kombinert inspeksjonsrapport',JSON.stringify({fields:{company:offer.customer_name,address:offer.property_address,postalCode:offer.postal_code,city:offer.municipality},modules:offer.services.map(x=>({'TAK-VIS':0,'TAK-TMO':1,'ENG':3,'SOL':4,'OPPM':5}[x])).filter(x=>x!==undefined),quote:{id:offer.id,services:offer.services,gnr:offer.gnr,bnr:offer.bnr,building_type:offer.building_type,notes:offer.property_notes},findings:[],overview:[]})]);
+      await c.query("UPDATE quote_requests SET status='accepted',accepted_at=now(),updated_at=now(),customer_id=$2,property_id=$3,report_id=$4 WHERE id=$1",[offer.id,cust.rows[0].id,prop.rows[0].id,report.rows[0].id]);
+      return {status:'accepted'};
+    });
+    return json(res,200,result);
+  }
   if (url.pathname==='/api/login' && method==='POST') {
     const b=await body(req);
     if (!text(b.email,254) || typeof b.password!=='string') throw fail(400,'Mangler e-post eller passord');
@@ -174,6 +227,21 @@ async function handler(req,res) {
     cookie(res,'',0); return json(res,200,{ok:true});
   }
   if (url.pathname==='/api/me' && method==='GET') return json(res,200,user);
+  if(url.pathname==='/api/quote-requests' && method==='GET'){
+    staff(user);
+    const q=await pool.query("SELECT id,customer_type,customer_name,email,phone,organization_number,property_address,postal_code,municipality,gnr,bnr,building_type,property_notes,services,status,line_items,discount_percent,price_display,offer_notes,valid_until,public_token,created_at,report_id FROM quote_requests ORDER BY created_at DESC LIMIT 200");
+    return json(res,200,q.rows);
+  }
+  const quoteEdit=url.pathname.match(/^\\/api\\/quote-requests\\/([0-9a-f-]{36})$/i);
+  if(quoteEdit && method==='PATCH'){
+    staff(user);const b=await body(req);
+    if(!Array.isArray(b.line_items)||b.line_items.length>30||!b.line_items.every(x=>text(x.description,200)&&Number.isFinite(x.price)&&x.price>=0&&x.price<=10000000)||!Number.isFinite(b.discount_percent)||b.discount_percent<0||b.discount_percent>100||!['incl','excl'].includes(b.price_display)||!['priced','sent'].includes(b.status))throw fail(400,'Ugyldig tilbudspris');
+    if(b.valid_until && !/^\\d{4}-\\d{2}-\\d{2}$/.test(b.valid_until))throw fail(400,'Ugyldig gyldighetsdato');
+    const q=await pool.query(`UPDATE quote_requests SET line_items=$2,discount_percent=$3,price_display=$4,offer_notes=$5,valid_until=$6,status=$7,sent_at=CASE WHEN $7='sent' THEN now() ELSE sent_at END,updated_at=now()
+    WHERE id=$1 AND status IN ('new','priced','sent') RETURNING id,public_token,status`,[quoteEdit[1],JSON.stringify(b.line_items),b.discount_percent,b.price_display,text(b.offer_notes,4000),b.valid_until||null,b.status]);
+    if(!q.rowCount)throw fail(409,'Tilbudet kan ikke endres');
+    return json(res,200,{...q.rows[0],url:'/tilbud/svar?token='+q.rows[0].public_token});
+  }
   if (url.pathname==='/api/customers' && method==='GET') {
     const q=user.role==='customer'
       ? await pool.query('SELECT c.id,c.name FROM customers c JOIN customer_memberships m ON m.customer_id=c.id WHERE m.user_id=$1 ORDER BY c.name',[user.id])

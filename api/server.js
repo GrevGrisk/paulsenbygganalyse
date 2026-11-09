@@ -114,6 +114,17 @@ async function handler(req,res) {
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"});
     return res.end(page);
   }
+  if (url.pathname==='/report-editor' && req.method==='GET') {
+    if (!pool) throw fail(503,'Database ikke konfigurert');
+    const user=await currentUser(req);staff(user);
+    const reportId=url.searchParams.get('id');
+    if (!id(reportId)) throw fail(400,'Ugyldig rapport-ID');
+    const report=await reportAccess(user,reportId);
+    if (report.status!=='draft') throw fail(409,'Rapporten er ikke redigerbar');
+    const page=await fs.readFile(new URL('./report-editor.html',import.meta.url));
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self' https://api.open-meteo.com https://archive-api.open-meteo.com https://geocoding-api.open-meteo.com blob: data:; style-src 'unsafe-inline' 'self'; script-src 'unsafe-inline' 'self'; connect-src 'self' https://api.open-meteo.com https://archive-api.open-meteo.com https://geocoding-api.open-meteo.com; img-src 'self' blob: data:; media-src 'self' blob:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"});
+    return res.end(page);
+  }
   if (url.pathname==='/health' && req.method==='GET') {
     if (!pool) return json(res,503,{status:'database_not_configured'});
     try { await pool.query('SELECT 1'); return json(res,200,{status:'ok'}); }

@@ -63,7 +63,7 @@ $('add').onclick=async()=>{
 function renderOverview(){
  const area=$('overviewRows');area.innerHTML='';
  data.overview||=[];
- if(data.overview.length>5)data.overview=data.overview.slice(0,5);
+ // Preserve all previously saved images, including older reports with more than five.
  for(let index=0;index<5;index++){
   const raw=data.overview[index];
   const item=typeof raw==='string'?{src:raw,caption:''}:raw;
@@ -200,7 +200,7 @@ async function loadServerReport(){
  data.fields||={};data.modules||=[];data.findings||=[];
  fields.forEach(id=>$(id).value=data.fields[id]||'');
  document.querySelectorAll('[data-mod]').forEach(e=>e.checked=data.modules.includes(+e.dataset.mod));
- render();weatherDisplay();photoRender();loaded=true;
+ render();renderOverview();weatherDisplay();photoRender();loaded=true;
  $('saveStatus').textContent='Rapportutkast lastet fra server';
 }
 window.addEventListener('pagehide',()=>{if(pending)flushServerSave()});

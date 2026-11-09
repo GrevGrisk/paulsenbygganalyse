@@ -2,7 +2,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import { Pool } from 'pg';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 
 
 const imageBucket=process.env.S3_BUCKET;
@@ -10,13 +10,13 @@ const imageClient=imageBucket && process.env.S3_ENDPOINT && process.env.S3_ACCES
   ? new S3Client({region:process.env.S3_REGION||'auto',endpoint:process.env.S3_ENDPOINT,forcePathStyle:false,credentials:{accessKeyId:process.env.S3_ACCESS_KEY_ID,secretAccessKey:process.env.S3_SECRET_ACCESS_KEY}})
   : null;
 const imagePath=(reportId,key)=>'/api/reports/'+reportId+'/images/'+key;
-const imageKey=(reportId)=>'reports/'+reportId+'/'+crypto.randomUUID()+'.jpg';
-async function storeImage(reportId,bytes){
+const imageKey=(report,kind)=>'projects/'+reportLabel(report).report_code+'/'+reportLabel(report).report_code+'-'+kind+'-'+crypto.randomUUID().slice(0,8)+'.jpg';
+async function storeImage(report,bytes,kind='funn01'){
   if(!imageClient)throw fail(503,'Bildelagring er ikke konfigurert');
   if(bytes.length<1||bytes.length>8*1024*1024)throw fail(413,'Bildet er for stort (maks 8 MB)');
-  const key=imageKey(reportId);
+  const key=imageKey(report,kind);
   await imageClient.send(new PutObjectCommand({Bucket:imageBucket,Key:key,Body:bytes,ContentType:'image/jpeg',CacheControl:'private, max-age=3600'}));
-  return imagePath(reportId,key.slice(('reports/'+reportId+'/').length,-4));
+  return imagePath(report.id,key.slice(key.lastIndexOf('/')+1,-4));
 }
 async function moveEmbeddedImages(reportId,content){
   const walk=async value=>{
@@ -328,13 +328,13 @@ async function handler(req,res) {
     return json(res,201,reportLabel(q.rows[0]));
   }
 
-  const imageMatch=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})\/images\/([0-9a-f-]{36})$/i);
+  const imageMatch=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})\/images\/([A-Za-z0-9_-]{8,100})$/i);
   if(imageMatch && (method==='GET'||method==='POST')){
     const reportId=imageMatch[1],imageId=imageMatch[2];
     const report=await reportAccess(user,reportId);
     if(method==='POST')throw fail(405,'Bruk bildeopplasting uten bilde-ID');
     if(!imageClient)throw fail(503,'Bildelagring er ikke konfigurert');
-    const prefix='reports/'+reportId+'/'+imageId;
+    const prefix=imageId.includes('-')&&!/^[0-9a-f-]{36}$/i.test(imageId)?'projects/'+reportLabel(report).report_code+'/'+imageId:'reports/'+reportId+'/'+imageId;
     let object;
     for(const extension of ['.jpg','.png','.webp']){
       try{object=await imageClient.send(new GetObjectCommand({Bucket:imageBucket,Key:prefix+extension}));break}
@@ -344,6 +344,16 @@ async function handler(req,res) {
     res.writeHead(200,{'Content-Type':object.ContentType||'image/jpeg','Cache-Control':'private, max-age=3600','X-Content-Type-Options':'nosniff'});
     for await(const part of object.Body)res.write(part);
     return res.end();
+  }
+  const imageList=url.pathname.match(/^\\/api\\/reports\\/([0-9a-f-]{36})\\/image-list$/i);
+  if(imageList && method==='GET'){
+    staff(user);
+    const report=await reportAccess(user,imageList[1]);
+    if(!imageClient)throw fail(503,'Bildelagring er ikke konfigurert');
+    const code=reportLabel(report).report_code;
+    const result=await imageClient.send(new ListObjectsV2Command({Bucket:imageBucket,Prefix:'projects/'+code+'/',MaxKeys:1000}));
+    const images=(result.Contents||[]).filter(x=>/\\.(jpg|png|webp)$/i.test(x.Key)).map(x=>({name:x.Key.split('/').pop(),url:imagePath(report.id,x.Key.split('/').pop().replace(/\\.(jpg|png|webp)$/i,'')),size:x.Size}));
+    return json(res,200,{report_code:code,images});
   }
   const imageUpload=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})\/images$/i);
   if(imageUpload && method==='POST'){
@@ -356,7 +366,8 @@ async function handler(req,res) {
     for await(const part of req){size+=part.length;if(size>8*1024*1024)throw fail(413,'Bildet er for stort (maks 8 MB)');parts.push(part)}
     const bytes=Buffer.concat(parts);
     if(bytes.length<4||bytes[0]!==0xff||bytes[1]!==0xd8)throw fail(400,'Ugyldig JPEG-bilde');
-    return json(res,201,{url:await storeImage(reportId,bytes)});
+    const kind=(url.searchParams.get('kind')||'funn01').replace(/[^a-z0-9-]/gi,'').slice(0,40);
+    return json(res,201,{url:await storeImage(report,bytes,kind)});
   }
   const match=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})(?:\/(submit|approve|publish))?$/i);
   if (match) {

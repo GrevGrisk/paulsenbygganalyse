@@ -58,6 +58,15 @@ CREATE TABLE IF NOT EXISTS reports (
     status <> 'published' OR (approved_by IS NOT NULL AND approved_at IS NOT NULL AND published_at IS NOT NULL)
   )
 );
+-- Stabilt, unikt løpenummer for prosjekter, også for eldre rapporter.
+CREATE SEQUENCE IF NOT EXISTS report_number_seq;
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS report_number bigint;
+UPDATE reports SET report_number=nextval('report_number_seq') WHERE report_number IS NULL;
+SELECT setval('report_number_seq',GREATEST(COALESCE((SELECT MAX(report_number) FROM reports),0),1),true);
+ALTER TABLE reports ALTER COLUMN report_number SET DEFAULT nextval('report_number_seq');
+ALTER TABLE reports ALTER COLUMN report_number SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS reports_report_number_unique ON reports(report_number);
+
 CREATE INDEX IF NOT EXISTS reports_property_idx ON reports(property_id);
 CREATE INDEX IF NOT EXISTS reports_status_idx ON reports(status);
 

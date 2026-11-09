@@ -354,14 +354,14 @@ async function handler(req,res) {
     for await(const part of object.Body)res.write(part);
     return res.end();
   }
-  const imageList=url.pathname.match(/^\\/api\\/reports\\/([0-9a-f-]{36})\\/image-list$/i);
+  const imageList=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})\/image-list$/i);
   if(imageList && method==='GET'){
     staff(user);
     const report=await reportAccess(user,imageList[1]);
     if(!imageClient)throw fail(503,'Bildelagring er ikke konfigurert');
     const code=reportLabel(report).report_code;
     const result=await imageClient.send(new ListObjectsV2Command({Bucket:imageBucket,Prefix:'projects/'+code+'/',MaxKeys:1000}));
-    const images=(result.Contents||[]).filter(x=>/\\.(jpg|png|webp)$/i.test(x.Key)).map(x=>({name:x.Key.split('/').pop(),url:imagePath(report.id,x.Key.split('/').pop().replace(/\\.(jpg|png|webp)$/i,'')),size:x.Size}));
+    const images=(result.Contents||[]).filter(x=>/\.(jpg|png|webp)$/i.test(x.Key)).map(x=>({name:x.Key.split('/').pop(),url:imagePath(report.id,x.Key.split('/').pop().replace(/\.(jpg|png|webp)$/i,'')),size:x.Size}));
     return json(res,200,{report_code:code,images});
   }
   const imageUpload=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})\/images$/i);

@@ -86,6 +86,17 @@ async function init() {
   console.log('Databaseskjema kontrollert');
 }
 async function handler(req,res) {
+  if (origin && req.headers.origin === origin) {
+    res.setHeader('Access-Control-Allow-Origin',origin);
+    res.setHeader('Access-Control-Allow-Credentials','true');
+    res.setHeader('Vary','Origin');
+  }
+  if (req.method === 'OPTIONS') {
+    if (req.headers.origin !== origin) throw fail(403,'Ugyldig opprinnelse');
+    res.setHeader('Access-Control-Allow-Methods','GET,POST,PATCH,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers','Content-Type');
+    res.writeHead(204); return res.end();
+  }
   const url=new URL(req.url,'http://localhost');
   if (url.pathname==='/health' && req.method==='GET') {
     if (!pool) return json(res,503,{status:'database_not_configured'});

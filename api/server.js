@@ -192,6 +192,15 @@ async function handler(req,res) {
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
     return res.end(page);
   }
+  if(url.pathname==='/report-images' && req.method==='GET'){
+    const user=await currentUser(req);staff(user);
+    const reportId=url.searchParams.get('id');
+    if(!id(reportId))throw fail(400,'Ugyldig rapport-ID');
+    await reportAccess(user,reportId);
+    const page=await fs.readFile(new URL('./report-images.html',import.meta.url));
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
+    return res.end(page);
+  }
   if (url.pathname==='/report-editor' && req.method==='GET') {
     if (!pool) throw fail(503,'Database ikke konfigurert');
     const user=await currentUser(req);staff(user);

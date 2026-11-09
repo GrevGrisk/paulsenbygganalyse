@@ -357,7 +357,7 @@ async function handler(req,res) {
     const projectCode=reportLabel(report).report_code;
     const isNamedImage=imageId.includes('-')&&!/^[0-9a-f-]{36}$/i.test(imageId);
     const prefixes=isNamedImage
-      ?['projects/'+projectCode+'/'+imageId,'projects/'+projectCode.replace(/-\\d{4}-/,'-undefined-')+'/'+imageId]
+      ?['projects/'+projectCode+'/'+imageId,'projects/'+projectCode.replace(/-\d{4}-/,'-undefined-')+'/'+imageId]
       :['reports/'+reportId+'/'+imageId];
     let object;
     for(const prefix of [...new Set(prefixes)]){

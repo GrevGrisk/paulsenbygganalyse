@@ -99,12 +99,12 @@ el('customerSelect').addEventListener('change',e=>{selectedCustomerId=e.target.v
 async function load(){
  const me=await api('/api/me');current=me;if(me.role==='customer'){location.replace('/kunde');return;}el('welcome').textContent='Innlogget som '+me.full_name+' ('+me.role+')';
  if(new URLSearchParams(location.search).get('next')==='pilot'&&me.role!=='customer'){location.replace('/pilot');return}
- el('staff').hidden=me.role==='customer';el('customerForm').hidden=me.role!=='admin';show('dashboard');
+ el('staff').hidden=me.role==='customer';el('customerForm').hidden=me.role!=='admin';el('contactForm').hidden=me.role!=='admin';show('dashboard');
  try{
-  const customers=await api('/api/customers');customerRecords=[];propertyOptions=[];el('propertyCustomer').replaceChildren();el('reportProperty').replaceChildren();
+  const customers=await api('/api/customers');customerRecords=[];propertyOptions=[];el('propertyCustomer').replaceChildren();el('contactCustomer').replaceChildren();el('reportProperty').replaceChildren();
   for(const c of customers){
    const customer={...c,properties:[]};customerRecords.push(customer);
-   const o=document.createElement('option');o.value=c.id;o.textContent=(c.customer_code||'')+' '+c.name;el('propertyCustomer').append(o);
+   const o=document.createElement('option');o.value=c.id;o.textContent=(c.customer_code||'')+' '+c.name;el('propertyCustomer').append(o);const oc=o.cloneNode(true);el('contactCustomer').append(oc);
    const properties=await api('/api/properties?customer_id='+encodeURIComponent(c.id));
    for(const p of properties){
     propertyOptions.push(p);const option=document.createElement('option');option.value=p.id;option.textContent=c.name+' – '+p.name;el('reportProperty').append(option);
@@ -119,6 +119,8 @@ async function submitForm(e,path,makeBody){e.preventDefault();const button=e.tar
  catch(err){el('staffMessage').className='error';el('staffMessage').textContent=err.message}
  finally{button.disabled=false}}
 el('customerForm').addEventListener('submit',e=>submitForm(e,'/api/customers',()=>({name:el('customerName').value,contact_name:el('contactName').value,contact_email:el('contactEmail').value})));
+el('contactCustomer').addEventListener('change',()=>{const c=customerRecords.find(x=>x.id===el('contactCustomer').value);el('editContactName').value=c?.contact_name||'';el('editContactEmail').value=c?.contact_email||''});
+el('contactForm').addEventListener('submit',async e=>{e.preventDefault();const id=el('contactCustomer').value;if(!id)return;try{await api('/api/customers/'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({contact_name:el('editContactName').value,contact_email:el('editContactEmail').value})});await load();el('staffMessage').textContent='Kontakt lagret'}catch(err){el('staffMessage').textContent=err.message}});
 el('propertyForm').addEventListener('submit',e=>submitForm(e,'/api/properties',()=>({customer_id:el('propertyCustomer').value,name:el('propertyName').value,address:el('propertyAddress').value})));
 el('reportForm').addEventListener('submit',e=>submitForm(e,'/api/reports',()=>({property_id:el('reportProperty').value,title:el('reportTitle').value,report_type:el('reportType').value,content:{fields:{},modules:[],findings:[],weather:{approved:false}}})));
 el('loginForm').addEventListener('submit',async e=>{e.preventDefault();el('loginError').textContent='';el('loginButton').disabled=true;

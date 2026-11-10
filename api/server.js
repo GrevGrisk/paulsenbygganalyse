@@ -173,6 +173,12 @@ async function handler(req,res) {
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
     return res.end(page);
   }
+  if (url.pathname==='/kunde/demo' && req.method==='GET') {
+    const user=await currentUser(req);staff(user);
+    const page=await fs.readFile(new URL('./customer-demo.html',import.meta.url));
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'"});
+    return res.end(page);
+  }
   if (url.pathname==='/kunde' && req.method==='GET') {
     try { const user=await currentUser(req);if(user.role!=='customer')throw fail(403,'Ingen kundetilgang'); }
     catch(e){if(e.code===401){res.writeHead(302,{Location:'/?next=kunde','Cache-Control':'no-store'});return res.end()}throw e;}

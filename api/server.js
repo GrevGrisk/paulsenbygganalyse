@@ -349,6 +349,12 @@ async function handler(req,res) {
     return json(res,200,q.rows);
   }
   const quoteEdit=url.pathname.match(/^\/api\/quote-requests\/([0-9a-f-]{36})$/i);
+  if(quoteEdit && method==='DELETE'){
+    admin(user);
+    const q=await pool.query("DELETE FROM quote_requests WHERE id=$1 AND status IN ('new','priced','declined') RETURNING id",[quoteEdit[1]]);
+    if(!q.rowCount)throw fail(409,'Kun ubehandlede, lagrede utkast eller avslåtte forespørsler kan slettes. Sendte og aksepterte tilbud må beholdes.');
+    return json(res,200,{deleted:true});
+  }
   if(quoteEdit && method==='PATCH'){
     staff(user);const b=await body(req);
     if(!Array.isArray(b.line_items)||b.line_items.length>30||!b.line_items.every(x=>text(x.description,200)&&Number.isFinite(x.price)&&x.price>=0&&x.price<=10000000)||!Number.isFinite(b.discount_percent)||b.discount_percent<0||b.discount_percent>100||!['incl','excl'].includes(b.price_display)||!['priced','sent'].includes(b.status))throw fail(400,'Ugyldig tilbudspris');

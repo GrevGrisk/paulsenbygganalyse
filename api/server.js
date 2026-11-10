@@ -317,7 +317,7 @@ async function handler(req,res) {
     if(!id(customerId))throw fail(400,'Velg kunde');
     const customer=await pool.query('SELECT id,name FROM customers WHERE id=$1',[customerId]);
     if(!customer.rowCount)throw fail(404,'Kunde ikke funnet');
-    const properties=await pool.query(`SELECT p.id,p.name,p.address,r.id AS report_id,r.title AS report_title,r.report_type,r.status AS report_status,r.created_at AS report_created_at FROM properties p LEFT JOIN reports r ON r.property_id=p.id WHERE p.customer_id=$1 ORDER BY p.name,r.created_at DESC`,[customerId]);
+    const properties=await pool.query(`SELECT p.id,p.name,p.address,r.id AS report_id,r.title AS report_title,r.report_type,r.status AS report_status,r.created_at AS report_created_at,r.content->>'cover' AS report_cover FROM properties p LEFT JOIN reports r ON r.property_id=p.id WHERE p.customer_id=$1 ORDER BY p.name,r.created_at DESC`,[customerId]);
     const quotes=await pool.query('SELECT id,property_address,services,status,created_at,public_token FROM quote_requests WHERE customer_id=$1 ORDER BY created_at DESC LIMIT 100',[customerId]);
     return json(res,200,{customer:customer.rows[0],properties:properties.rows,quotes:quotes.rows});
   }

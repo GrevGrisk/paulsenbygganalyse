@@ -496,7 +496,7 @@ async function handler(req,res) {
         const q=await c.query("UPDATE reports SET status='approved',approved_by=$2,approved_at=now(),updated_at=now() WHERE id=$1 AND status='review' RETURNING *",[reportId,user.id]);
         if (!q.rowCount) throw fail(409,'Rapporten kan ikke godkjennes');
         await c.query(`INSERT INTO report_versions(report_id,version_number,content,created_by)
-          VALUES($1,1,$2,$3)`,[reportId,JSON.stringify(q.rows[0].content),user.id]);
+          VALUES($1,(SELECT COALESCE(MAX(version_number),0)+1 FROM report_versions WHERE report_id=$1),$2,$3)`,[reportId,JSON.stringify(q.rows[0].content),user.id]);
         return {id:reportId,status:'approved'};
       }));
     }

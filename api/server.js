@@ -359,8 +359,9 @@ async function handler(req,res) {
   if(customerEdit&&method==='PATCH'){
     admin(user);const b=await body(req);
     const email=text(b.contact_email,320);
+    if(!text(b.name,200))throw fail(400,'Kundenavn mangler');
     if(email&&!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email))throw fail(400,'Ugyldig e-postadresse');
-    const q=await pool.query('UPDATE customers SET contact_name=$2,contact_email=$3 WHERE id=$1 RETURNING *',[customerEdit[1],text(b.contact_name,200),email]);
+    const q=await pool.query('UPDATE customers SET name=$2,organization_number=$3,contact_name=$4,contact_email=$5 WHERE id=$1 RETURNING *',[customerEdit[1],b.name.trim(),text(b.organization_number,30),text(b.contact_name,200),email]);
     if(!q.rowCount)throw fail(404,'Kunde ikke funnet');
     return json(res,200,customerLabel(q.rows[0]));
   }

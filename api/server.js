@@ -385,7 +385,7 @@ async function handler(req,res) {
     const propertyId=url.searchParams.get('property_id');
     if (!id(propertyId)) throw fail(400,'Velg eiendom');
     await propertyAccess(user,propertyId);
-    const q=await pool.query(`SELECT id,property_id,title,report_type,status,created_at,updated_at,published_at FROM reports
+    const q=await pool.query(`SELECT id,property_id,title,report_type,status,created_at,updated_at,published_at,content->>'cover' AS cover FROM reports
       WHERE property_id=$1 AND ($2::text <> 'customer' OR status='published') ORDER BY created_at DESC`,[propertyId,user.role]);
     return json(res,200,q.rows.map(reportLabel));
   }

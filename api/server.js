@@ -207,8 +207,8 @@ async function handler(req,res) {
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"});
     return res.end(page);
   }
-  if (url.pathname==='/report-preview' && req.method==='GET') {
-    const user=await currentUser(req);staff(user);
+  if ((url.pathname==='/report-preview'||url.pathname==='/kunde/rapport') && req.method==='GET') {
+    const user=await currentUser(req);
     const reportId=url.searchParams.get('id');
     if (!id(reportId)) throw fail(400,'Ugyldig rapport-ID');
     await reportAccess(user,reportId);
@@ -346,14 +346,23 @@ async function handler(req,res) {
   if (url.pathname==='/api/customers' && method==='GET') {
     const q=user.role==='customer'
       ? await pool.query('SELECT c.id,c.name FROM customers c JOIN customer_memberships m ON m.customer_id=c.id WHERE m.user_id=$1 ORDER BY c.name',[user.id])
-      : await pool.query('SELECT id,name,organization_number,customer_number FROM customers ORDER BY name');
+      : await pool.query('SELECT id,name,organization_number,customer_number,contact_name,contact_email FROM customers ORDER BY name');
     return json(res,200,q.rows.map(customerLabel));
   }
   if (url.pathname==='/api/customers' && method==='POST') {
     admin(user); const b=await body(req);
     if (!text(b.name)) throw fail(400,'Mangler kundenavn');
-    const q=await pool.query('INSERT INTO customers(name,organization_number) VALUES ($1,$2) RETURNING *',[b.name.trim(),text(b.organization_number,30)]);
+    const q=await pool.query('INSERT INTO customers(name,organization_number,contact_name,contact_email) VALUES ($1,$2,$3,$4) RETURNING *',[b.name.trim(),text(b.organization_number,30),text(b.contact_name,200),text(b.contact_email,320)]);
     return json(res,201,customerLabel(q.rows[0]));
+  }
+  const customerEdit=url.pathname.match(/^\/api\/customers\/([0-9a-f-]{36})$/i);
+  if(customerEdit&&method==='PATCH'){
+    admin(user);const b=await body(req);
+    const email=text(b.contact_email,320);
+    if(email&&!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email))throw fail(400,'Ugyldig e-postadresse');
+    const q=await pool.query('UPDATE customers SET contact_name=$2,contact_email=$3 WHERE id=$1 RETURNING *',[customerEdit[1],text(b.contact_name,200),email]);
+    if(!q.rowCount)throw fail(404,'Kunde ikke funnet');
+    return json(res,200,customerLabel(q.rows[0]));
   }
   if (url.pathname==='/api/properties' && method==='GET') {
     const customerId=url.searchParams.get('customer_id');

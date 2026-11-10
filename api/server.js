@@ -279,7 +279,7 @@ async function handler(req,res) {
   }
   const quotePreview=url.pathname.match(/^\/api\/quote-requests\/([0-9a-f-]{36})\/preview$/i);
   if(quotePreview&&method==='GET'){
-    staff(user);const q=await pool.query('SELECT * FROM quote_requests WHERE id=$1',[quotePreview[1]]);
+    const user=await currentUser(req);staff(user);const q=await pool.query('SELECT * FROM quote_requests WHERE id=$1',[quotePreview[1]]);
     if(!q.rowCount)throw fail(404,'Tilbud ikke funnet');return json(res,200,q.rows[0]);
   }
   const quotePublic=url.pathname.match(/^\/api\/quote\/([a-f0-9]{48})$/);

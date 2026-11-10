@@ -28,7 +28,8 @@ a{color:#b3d9e9}ul{padding-left:22px}li{padding:8px 0}small{color:#a8bec8}.error
 <div id="staff" class="tile" hidden style="margin-top:18px"><h2>Rapportarbeid</h2>
 <p>Opprett kunder, eiendommer og rapportutkast. Eksisterende detaljskjema kobles på i neste fase.</p>
 <div class="grid">
-<form id="customerForm"><h3>Ny kunde</h3><label for="customerName">Kundenavn</label><input id="customerName" required maxlength="200"><p><button>Opprett kunde</button></p></form>
+<form id="customerForm"><h3>Ny kunde</h3><label for="customerName">Kundenavn</label><input id="customerName" required maxlength="200"><label for="contactName">Kontaktperson</label><input id="contactName" maxlength="200"><label for="contactEmail">Kontaktens e-post</label><input id="contactEmail" type="email" maxlength="320"><p><button>Opprett kunde</button></p></form>
+<form id="contactForm"><h3>Rediger kundekontakt</h3><label for="contactCustomer">Kunde</label><select id="contactCustomer" required></select><label for="editContactName">Kontaktperson</label><input id="editContactName" maxlength="200"><label for="editContactEmail">E-post</label><input id="editContactEmail" type="email" maxlength="320"><p><button>Lagre kontakt</button></p></form>
 <form id="propertyForm"><h3>Ny eiendom</h3><label for="propertyCustomer">Kunde</label><select id="propertyCustomer" required></select><label for="propertyName">Eiendomsnavn</label><input id="propertyName" required><label for="propertyAddress">Adresse</label><input id="propertyAddress" required><p><button>Opprett eiendom</button></p></form>
 <form id="reportForm"><h3>Nytt rapportutkast</h3><label for="reportProperty">Eiendom</label><select id="reportProperty" required></select><label for="reportTitle">Rapporttittel</label><input id="reportTitle" required maxlength="300"><label for="reportType">Rapporttype</label><select id="reportType"><option>Visuell takinspeksjon</option><option>Takinspeksjon – termografi</option><option>Lekkasjesøk</option><option>Energiscreening</option><option>Solcelleinspeksjon</option><option>Oppmåling / 3D</option><option>Modellering</option><option>Dronefoto</option></select><p><button>Opprett utkast</button></p></form>
 </div><p id="staffMessage" role="status"></p></div>
@@ -117,7 +118,7 @@ async function submitForm(e,path,makeBody){e.preventDefault();const button=e.tar
  try{await api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(makeBody())});e.target.reset();el('staffMessage').className='ok';el('staffMessage').textContent='Lagret';await load()}
  catch(err){el('staffMessage').className='error';el('staffMessage').textContent=err.message}
  finally{button.disabled=false}}
-el('customerForm').addEventListener('submit',e=>submitForm(e,'/api/customers',()=>({name:el('customerName').value})));
+el('customerForm').addEventListener('submit',e=>submitForm(e,'/api/customers',()=>({name:el('customerName').value,contact_name:el('contactName').value,contact_email:el('contactEmail').value})));
 el('propertyForm').addEventListener('submit',e=>submitForm(e,'/api/properties',()=>({customer_id:el('propertyCustomer').value,name:el('propertyName').value,address:el('propertyAddress').value})));
 el('reportForm').addEventListener('submit',e=>submitForm(e,'/api/reports',()=>({property_id:el('reportProperty').value,title:el('reportTitle').value,report_type:el('reportType').value,content:{fields:{},modules:[],findings:[],weather:{approved:false}}})));
 el('loginForm').addEventListener('submit',async e=>{e.preventDefault();el('loginError').textContent='';el('loginButton').disabled=true;

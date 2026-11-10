@@ -437,7 +437,7 @@ async function handler(req,res) {
     const kind=(url.searchParams.get('kind')||'funn01').replace(/[^a-z0-9-]/gi,'').slice(0,40);
     return json(res,201,{url:await storeImage(report,bytes,kind)});
   }
-  const match=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})(?:\/(submit|approve|publish))?$/i);
+  const match=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})(?:\/(submit|approve|publish|reopen))?$/i);
   if (match) {
     const reportId=match[1],action=match[2];
     const r=await reportAccess(user,reportId);
@@ -467,6 +467,12 @@ async function handler(req,res) {
     if (method==='POST' && action==='submit') {
       const q=await pool.query("UPDATE reports SET status='review',updated_at=now() WHERE id=$1 AND status='draft' RETURNING id,status",[reportId]);
       if (!q.rowCount) throw fail(409,'Rapporten kan ikke sendes til kontroll');
+      return json(res,200,q.rows[0]);
+    }
+    if (method==='POST' && action==='reopen') {
+      admin(user);
+      const q=await pool.query("UPDATE reports SET status='draft',updated_at=now() WHERE id=$1 AND status='review' RETURNING id,status",[reportId]);
+      if(!q.rowCount)throw fail(409,'Kun rapporter til kontroll kan sendes tilbake til utkast');
       return json(res,200,q.rows[0]);
     }
     if (method==='POST' && action==='approve') {

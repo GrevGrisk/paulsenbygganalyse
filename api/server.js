@@ -360,8 +360,8 @@ async function handler(req,res) {
     admin(user);const b=await body(req);
     const email=text(b.contact_email,320),billingEmail=text(b.billing_email,320);
     if(!text(b.name,200))throw fail(400,'Kundenavn mangler');
-    if(email&&!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email))throw fail(400,'Ugyldig e-postadresse');
-    if(billingEmail&&!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(billingEmail))throw fail(400,'Ugyldig faktura-e-post');
+    if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw fail(400,'Ugyldig e-postadresse');
+    if(billingEmail&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billingEmail))throw fail(400,'Ugyldig faktura-e-post');
     const q=await pool.query('UPDATE customers SET name=$2,organization_number=$3,contact_name=$4,contact_email=$5,phone=$6,billing_address=$7,billing_postal_code=$8,billing_city=$9,billing_email=$10,reference=$11 WHERE id=$1 RETURNING *',[customerEdit[1],b.name.trim(),text(b.organization_number,30),text(b.contact_name,200),email,text(b.phone,50),text(b.billing_address,400),text(b.billing_postal_code,20),text(b.billing_city,100),billingEmail,text(b.reference,150)]);
     if(!q.rowCount)throw fail(404,'Kunde ikke funnet');
     return json(res,200,customerLabel(q.rows[0]));

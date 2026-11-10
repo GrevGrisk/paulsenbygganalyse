@@ -71,7 +71,7 @@ function renderCustomerReports(){
    const info=document.createElement('div');const title=document.createElement('strong');title.textContent=(r.report_code||'')+' · '+r.title;info.append(title);
    const state=document.createElement('div');state.className='muted';state.textContent=r.status==='draft'?'Utkast':r.status==='published'?'Publisert':r.status;info.append(state);row.append(info);
    const links=document.createElement('div');links.className='report-links';
-   if(current.role!=='customer'&&r.status==='draft'){const a=document.createElement('a');a.href='/report-editor?id='+encodeURIComponent(r.id);a.textContent='Åpne og rediger';links.append(a)}
+   if(current.role!=='customer'&&r.status==='draft'){const a=document.createElement('a');a.href='/report-editor?id='+encodeURIComponent(r.id);a.textContent='Åpne og rediger';links.append(a)}if(current.role!=='customer'&&r.status!=='draft'){const a=document.createElement('a');a.href='/report-preview?id='+encodeURIComponent(r.id);a.textContent='Åpne rapport / status';links.append(a)}
    if(current.role!=='customer'){const a=document.createElement('a');a.href='/report-images?id='+encodeURIComponent(r.id);a.textContent='Prosjektbilder';links.append(a)}
    if(current.role==='admin'){
     const remove=document.createElement('button');remove.type='button';remove.className='delete-report';remove.textContent='Slett rapport';

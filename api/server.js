@@ -176,7 +176,7 @@ async function handler(req,res) {
   if (url.pathname==='/kunde/demo' && req.method==='GET') {
     const user=await currentUser(req);staff(user);
     const page=await fs.readFile(new URL('./customer-demo.html',import.meta.url));
-    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'"});
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"});
     return res.end(page);
   }
   if (url.pathname==='/kunde' && req.method==='GET') {
@@ -311,6 +311,16 @@ async function handler(req,res) {
     cookie(res,'',0); return json(res,200,{ok:true});
   }
   if (url.pathname==='/api/me' && method==='GET') return json(res,200,user);
+  if(url.pathname==='/api/admin/customer-preview' && method==='GET'){
+    staff(user);
+    const customerId=url.searchParams.get('customer_id');
+    if(!id(customerId))throw fail(400,'Velg kunde');
+    const customer=await pool.query('SELECT id,name FROM customers WHERE id=$1',[customerId]);
+    if(!customer.rowCount)throw fail(404,'Kunde ikke funnet');
+    const properties=await pool.query(`SELECT p.id,p.name,p.address,r.id AS report_id,r.title AS report_title,r.report_type,r.status AS report_status,r.created_at AS report_created_at FROM properties p LEFT JOIN reports r ON r.property_id=p.id WHERE p.customer_id=$1 ORDER BY p.name,r.created_at DESC`,[customerId]);
+    const quotes=await pool.query('SELECT id,property_address,services,status,created_at,public_token FROM quote_requests WHERE customer_id=$1 ORDER BY created_at DESC LIMIT 100',[customerId]);
+    return json(res,200,{customer:customer.rows[0],properties:properties.rows,quotes:quotes.rows});
+  }
   if(url.pathname==='/api/customer/quotes' && method==='GET'){
     if(user.role!=='customer')throw fail(403,'Ingen kundetilgang');
     const q=await pool.query(`SELECT q.id,q.property_address,q.services,q.status,q.created_at,q.public_token FROM quote_requests q

@@ -176,35 +176,35 @@ async function handler(req,res) {
   if (url.pathname==='/kunde/demo' && req.method==='GET') {
     const user=await currentUser(req);staff(user);
     const page=await fs.readFile(new URL('./customer-demo.html',import.meta.url));
-    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"});
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' https: data: blob:; base-uri 'none'; frame-ancestors 'none'"});
     return res.end(page);
   }
   if (url.pathname==='/kunde' && req.method==='GET') {
     try { const user=await currentUser(req);if(user.role!=='customer')throw fail(403,'Ingen kundetilgang'); }
     catch(e){if(e.code===401){res.writeHead(302,{Location:'/?next=kunde','Cache-Control':'no-store'});return res.end()}throw e;}
     const page=await fs.readFile(new URL('./customer-portal.html',import.meta.url));
-    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"});
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' https: data: blob:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"});
     return res.end(page);
   }
   if (url.pathname==='/' && req.method==='GET') {
     const page=await fs.readFile(new URL('./portal.html',import.meta.url));
-    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"});
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' https: data: blob:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"});
     return res.end(page);
   }
   if ((url.pathname==='/tilbud' || url.pathname==='/be-om-tilbud') && req.method==='GET') {
     const page=await fs.readFile(new URL('./quote-request.html',import.meta.url));
-    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"});
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' https: data: blob:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"});
     return res.end(page);
   }
   if (url.pathname==='/tilbud/admin' && req.method==='GET') {
     const user=await currentUser(req);staff(user);
     const page=await fs.readFile(new URL('./quote-admin.html',import.meta.url));
-    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"});
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' https: data: blob:; base-uri 'none'; frame-ancestors 'none'"});
     return res.end(page);
   }
   if (url.pathname==='/tilbud/svar' && req.method==='GET') {
     const page=await fs.readFile(new URL('./quote-accept.html',import.meta.url));
-    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"});
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' https: data: blob:; base-uri 'none'; frame-ancestors 'none'"});
     return res.end(page);
   }
   if ((url.pathname==='/report-preview'||url.pathname==='/kunde/rapport') && req.method==='GET') {

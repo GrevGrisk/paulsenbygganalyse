@@ -153,3 +153,9 @@ ALTER TABLE customers ADD COLUMN IF NOT EXISTS billing_postal_code text;
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS billing_city text;
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS billing_email text;
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS reference text;
+
+ALTER TABLE quote_requests ADD COLUMN IF NOT EXISTS accepted_by_name text;
+ALTER TABLE quote_requests ADD COLUMN IF NOT EXISTS accepted_by_email text;
+ALTER TABLE quote_requests ADD COLUMN IF NOT EXISTS acceptance_ip text;
+ALTER TABLE quote_requests ADD COLUMN IF NOT EXISTS acceptance_user_agent text;
+ALTER TABLE quote_requests ADD COLUMN IF NOT EXISTS accepted_terms_snapshot jsonb;

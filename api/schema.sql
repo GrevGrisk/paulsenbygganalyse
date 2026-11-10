@@ -146,3 +146,10 @@ CREATE INDEX IF NOT EXISTS quote_requests_created_idx ON quote_requests(created_
 
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS contact_name text;
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS contact_email text;
+
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone text;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS billing_address text;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS billing_postal_code text;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS billing_city text;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS billing_email text;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS reference text;

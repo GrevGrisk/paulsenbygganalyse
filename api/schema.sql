@@ -143,3 +143,6 @@ CREATE TABLE IF NOT EXISTS quote_requests (
  updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS quote_requests_created_idx ON quote_requests(created_at DESC);
+
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS contact_name text;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS contact_email text;

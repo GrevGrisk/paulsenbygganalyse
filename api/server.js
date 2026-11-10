@@ -173,6 +173,13 @@ async function handler(req,res) {
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
     return res.end(page);
   }
+  if (url.pathname==='/kunde' && req.method==='GET') {
+    try { const user=await currentUser(req);if(user.role!=='customer')throw fail(403,'Ingen kundetilgang'); }
+    catch(e){if(e.code===401){res.writeHead(302,{Location:'/?next=kunde','Cache-Control':'no-store'});return res.end()}throw e;}
+    const page=await fs.readFile(new URL('./customer-portal.html',import.meta.url));
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"});
+    return res.end(page);
+  }
   if (url.pathname==='/' && req.method==='GET') {
     const page=await fs.readFile(new URL('./portal.html',import.meta.url));
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"});
@@ -298,6 +305,13 @@ async function handler(req,res) {
     cookie(res,'',0); return json(res,200,{ok:true});
   }
   if (url.pathname==='/api/me' && method==='GET') return json(res,200,user);
+  if(url.pathname==='/api/customer/quotes' && method==='GET'){
+    if(user.role!=='customer')throw fail(403,'Ingen kundetilgang');
+    const q=await pool.query(`SELECT q.id,q.property_address,q.services,q.status,q.created_at,q.public_token FROM quote_requests q
+      JOIN customer_memberships m ON m.customer_id=q.customer_id WHERE m.user_id=$1
+      ORDER BY q.created_at DESC LIMIT 100`,[user.id]);
+    return json(res,200,q.rows);
+  }
   if(url.pathname==='/api/quote-requests' && method==='GET'){
     staff(user);
     const q=await pool.query("SELECT id,customer_type,customer_name,email,phone,organization_number,property_address,postal_code,municipality,gnr,bnr,building_type,property_notes,services,status,line_items,discount_percent,price_display,offer_notes,valid_until,public_token,created_at,report_id FROM quote_requests ORDER BY created_at DESC LIMIT 200");

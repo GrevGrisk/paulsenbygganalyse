@@ -24,12 +24,12 @@ a{color:#b3d9e9}ul{padding-left:22px}li{padding:8px 0}small{color:#a8bec8}.error
 <p><a href="/pilot">Åpne pilotmeny →</a></p>
 <div class="tile" id="reportBrowser"><h2>Finn kunde og rapport</h2>
 <div class="browser-controls"><div><label for="customerSearch">Søk etter kunde eller kundenummer</label><input id="customerSearch" type="search" placeholder="Søk etter navn eller kundenummer…" autocomplete="off"></div><div><label for="customerSelect">Velg kunde</label><select id="customerSelect"><option value="">Velg kunde …</option></select></div></div>
-<div id="selectedCustomer" class="muted" aria-live="polite"></div><div id="customerReports" aria-live="polite"><p class="muted">Velg en kunde for å se eiendommer og rapporter.</p></div></div>
+<div id="selectedCustomer" class="muted" aria-live="polite"></div><p><button type="button" id="editSelectedCustomer" class="secondary" hidden>Rediger kundedetaljer</button></p><div id="customerReports" aria-live="polite"><p class="muted">Velg en kunde for å se eiendommer og rapporter.</p></div></div>
 <div id="staff" class="tile" hidden style="margin-top:18px"><h2>Rapportarbeid</h2>
 <p>Opprett kunder, eiendommer og rapportutkast. Eksisterende detaljskjema kobles på i neste fase.</p>
 <div class="grid">
 <form id="customerForm"><h3>Ny kunde</h3><label for="customerName">Kundenavn</label><input id="customerName" required maxlength="200"><label for="contactName">Kontaktperson</label><input id="contactName" maxlength="200"><label for="contactEmail">Kontaktens e-post</label><input id="contactEmail" type="email" maxlength="320"><p><button>Opprett kunde</button></p></form>
-<form id="contactForm"><h3>Rediger kundekontakt</h3><label for="contactCustomer">Kunde</label><select id="contactCustomer" required></select><label for="editContactName">Kontaktperson</label><input id="editContactName" maxlength="200"><label for="editContactEmail">E-post</label><input id="editContactEmail" type="email" maxlength="320"><p><button>Lagre kontakt</button></p></form>
+<form id="contactForm"><h3>Rediger kundedetaljer</h3><label for="contactCustomer">Kunde</label><select id="contactCustomer" required></select><label for="editCustomerName">Kundenavn</label><input id="editCustomerName" required maxlength="200"><label for="editOrganizationNumber">Organisasjonsnummer</label><input id="editOrganizationNumber" maxlength="30"><label for="editContactName">Kontaktperson</label><input id="editContactName" maxlength="200"><label for="editContactEmail">E-post</label><input id="editContactEmail" type="email" maxlength="320"><p><button>Lagre kontakt</button></p></form>
 <form id="propertyForm"><h3>Ny eiendom</h3><label for="propertyCustomer">Kunde</label><select id="propertyCustomer" required></select><label for="propertyName">Eiendomsnavn</label><input id="propertyName" required><label for="propertyAddress">Adresse</label><input id="propertyAddress" required><p><button>Opprett eiendom</button></p></form>
 <form id="reportForm"><h3>Nytt rapportutkast</h3><label for="reportProperty">Eiendom</label><select id="reportProperty" required></select><label for="reportTitle">Rapporttittel</label><input id="reportTitle" required maxlength="300"><label for="reportType">Rapporttype</label><select id="reportType"><option>Visuell takinspeksjon</option><option>Takinspeksjon – termografi</option><option>Lekkasjesøk</option><option>Energiscreening</option><option>Solcelleinspeksjon</option><option>Oppmåling / 3D</option><option>Modellering</option><option>Dronefoto</option></select><p><button>Opprett utkast</button></p></form>
 </div><p id="staffMessage" role="status"></p></div>
@@ -58,7 +58,7 @@ function updateCustomerOptions(){
 }
 function renderCustomerReports(){
  const area=el('customerReports');area.replaceChildren();const c=customerRecords.find(x=>x.id===selectedCustomerId);
- el('selectedCustomer').textContent=c?(c.customer_code||'')+' · '+c.name:'';
+ el('selectedCustomer').textContent=c?(c.customer_code||'')+' · '+c.name:'';el('editSelectedCustomer').hidden=!c||current?.role!=='admin';
  if(!c){const p=document.createElement('p');p.className='muted';p.textContent='Velg en kunde for å se eiendommer og rapporter.';area.append(p);return}
  const properties=c.properties||[];
  if(!properties.length){area.textContent='Ingen eiendommer registrert for denne kunden.';return}
@@ -94,6 +94,7 @@ async function deleteReport(report){
   await load();alert('Rapporten er permanent slettet.');
  }catch(e){alert('Kunne ikke slette rapporten: '+e.message)}
 }
+el('editSelectedCustomer').addEventListener('click',()=>{el('contactCustomer').value=selectedCustomerId;el('contactCustomer').dispatchEvent(new Event('change'));el('contactForm').scrollIntoView({behavior:'smooth',block:'center'});el('editCustomerName').focus()});
 el('customerSearch').addEventListener('input',updateCustomerOptions);
 el('customerSelect').addEventListener('change',e=>{selectedCustomerId=e.target.value;renderCustomerReports()});
 async function load(){
@@ -119,8 +120,8 @@ async function submitForm(e,path,makeBody){e.preventDefault();const button=e.tar
  catch(err){el('staffMessage').className='error';el('staffMessage').textContent=err.message}
  finally{button.disabled=false}}
 el('customerForm').addEventListener('submit',e=>submitForm(e,'/api/customers',()=>({name:el('customerName').value,contact_name:el('contactName').value,contact_email:el('contactEmail').value})));
-el('contactCustomer').addEventListener('change',()=>{const c=customerRecords.find(x=>x.id===el('contactCustomer').value);el('editContactName').value=c?.contact_name||'';el('editContactEmail').value=c?.contact_email||''});
-el('contactForm').addEventListener('submit',async e=>{e.preventDefault();const id=el('contactCustomer').value;if(!id)return;try{await api('/api/customers/'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({contact_name:el('editContactName').value,contact_email:el('editContactEmail').value})});await load();el('staffMessage').textContent='Kontakt lagret'}catch(err){el('staffMessage').textContent=err.message}});
+el('contactCustomer').addEventListener('change',()=>{const c=customerRecords.find(x=>x.id===el('contactCustomer').value);el('editCustomerName').value=c?.name||'';el('editOrganizationNumber').value=c?.organization_number||'';el('editContactName').value=c?.contact_name||'';el('editContactEmail').value=c?.contact_email||''});
+el('contactForm').addEventListener('submit',async e=>{e.preventDefault();const id=el('contactCustomer').value;if(!id)return;try{await api('/api/customers/'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:el('editCustomerName').value,organization_number:el('editOrganizationNumber').value,contact_name:el('editContactName').value,contact_email:el('editContactEmail').value})});await load();el('staffMessage').textContent='Kundedetaljer lagret'}catch(err){el('staffMessage').textContent=err.message}});
 el('propertyForm').addEventListener('submit',e=>submitForm(e,'/api/properties',()=>({customer_id:el('propertyCustomer').value,name:el('propertyName').value,address:el('propertyAddress').value})));
 el('reportForm').addEventListener('submit',e=>submitForm(e,'/api/reports',()=>({property_id:el('reportProperty').value,title:el('reportTitle').value,report_type:el('reportType').value,content:{fields:{},modules:[],findings:[],weather:{approved:false}}})));
 el('loginForm').addEventListener('submit',async e=>{e.preventDefault();el('loginError').textContent='';el('loginButton').disabled=true;

@@ -446,7 +446,7 @@ async function handler(req,res) {
     const kind=(url.searchParams.get('kind')||'funn01').replace(/[^a-z0-9-]/gi,'').slice(0,40);
     return json(res,201,{url:await storeImage(report,bytes,kind)});
   }
-  const match=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})(?:\/(submit|approve|publish|reopen))?$/i);
+  const match=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})(?:\/(submit|approve|publish|reopen|revise))?$/i);
   if (match) {
     const reportId=match[1],action=match[2];
     const r=await reportAccess(user,reportId);
@@ -484,6 +484,12 @@ async function handler(req,res) {
       if(!q.rowCount)throw fail(409,'Kun rapporter til kontroll kan sendes tilbake til utkast');
       return json(res,200,q.rows[0]);
     }
+    if (method==='POST' && action==='revise') {
+      admin(user);
+      const q=await pool.query("UPDATE reports SET status='draft',approved_by=NULL,approved_at=NULL,updated_at=now() WHERE id=$1 AND status IN ('published','approved') RETURNING id,status",[reportId]);
+      if(!q.rowCount)throw fail(409,'Rapporten kan ikke åpnes for korrigering');
+      return json(res,200,q.rows[0]);
+    }
     if (method==='POST' && action==='approve') {
       admin(user);
       return json(res,200,await transaction(async c=>{
@@ -496,12 +502,29 @@ async function handler(req,res) {
     }
     if (method==='POST' && action==='publish') {
       admin(user);
-      return json(res,200,await transaction(async c=>{
+      const b=await body(req);
+      const sendEmail=b.send_email===true;
+      if(sendEmail && (!process.env.RESEND_API_KEY || !process.env.QUOTE_NOTIFY_FROM))throw fail(503,'E-postutsending er ikke konfigurert');
+      let recipient=null;
+      if(sendEmail){
+        const contact=await pool.query('SELECT c.contact_email,c.name FROM customers c JOIN properties p ON p.customer_id=c.id JOIN reports r ON r.property_id=p.id WHERE r.id=$1',[reportId]);
+        recipient=contact.rows[0]?.contact_email?.trim();
+        if(!recipient||!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(recipient))throw fail(400,'Kunden mangler gyldig kontakt-e-post for utsending');
+      }
+      const published=await transaction(async c=>{
         const q=await c.query(`UPDATE reports SET status='published',published_by=$2,published_at=now(),updated_at=now()
           WHERE id=$1 AND status='approved' AND approved_by IS NOT NULL AND approved_at IS NOT NULL RETURNING id,property_id,status,published_at`,[reportId,user.id]);
         if (!q.rowCount) throw fail(409,'Kun godkjente rapporter kan overføres');
         return q.rows[0];
-      }));
+      });
+      if(!sendEmail)return json(res,200,{...published,email_sent:false});
+      try{
+        const reportCode=reportLabel(r).report_code;
+        const link='https://portal.paulsenbygganalyse.no/kunde';
+        const response=await fetch('https://api.resend.com/emails',{method:'POST',signal:AbortSignal.timeout(10000),headers:{Authorization:'Bearer '+process.env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.QUOTE_NOTIFY_FROM,to:[recipient],subject:'Rapport '+reportCode+' er klar – Paulsen Bygganalyse',text:'Hei,\\n\\nRapport '+reportCode+' er nå publisert og tilgjengelig i kundeportalen.\\n\\nÅpne kundeportalen: '+link+'\\n\\nMed vennlig hilsen\\nPaulsen Bygganalyse'})});
+        if(!response.ok){console.error('Report notification failed',response.status,(await response.text()).slice(0,300));return json(res,200,{...published,email_sent:false,email_error:'Rapporten er publisert, men e-posten kunne ikke sendes'})}
+        return json(res,200,{...published,email_sent:true});
+      }catch(error){console.error('Report notification failed',error);return json(res,200,{...published,email_sent:false,email_error:'Rapporten er publisert, men e-posten kunne ikke sendes'})}
     }
   }
   throw fail(404,'Ikke funnet');

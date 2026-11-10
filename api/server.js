@@ -162,13 +162,13 @@ async function handler(req,res) {
     res.writeHead(204); return res.end();
   }
   const url=new URL(req.url,'http://localhost');
-  if(['/pilot','/pilot/preflight','/pilot/registre','/pilot/bilder'].includes(url.pathname)&&req.method==='GET'){
+  if(['/pilot','/pilot/preflight','/pilot/registre','/pilot/bilder','/pilot/kunder'].includes(url.pathname)&&req.method==='GET'){
     let user;
     try{user=await currentUser(req);staff(user)}catch(e){
       if(e.code===401){res.writeHead(302,{Location:'/?next=pilot','Cache-Control':'no-store'});return res.end()}
       throw e;
     }
-    const file=url.pathname==='/pilot'?'pilot-menu.html':url.pathname==='/pilot/preflight'?'pilot-preflight.html':url.pathname==='/pilot/bilder'?'pilot-images.html':'pilot-registre.html';
+    const file=url.pathname==='/pilot'?'pilot-menu.html':url.pathname==='/pilot/preflight'?'pilot-preflight.html':url.pathname==='/pilot/bilder'?'pilot-images.html':url.pathname==='/pilot/kunder'?'pilot-customers.html':'pilot-registre.html';
     const page=await fs.readFile(new URL('./'+file,import.meta.url));
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
     return res.end(page);
@@ -346,22 +346,23 @@ async function handler(req,res) {
   if (url.pathname==='/api/customers' && method==='GET') {
     const q=user.role==='customer'
       ? await pool.query('SELECT c.id,c.name FROM customers c JOIN customer_memberships m ON m.customer_id=c.id WHERE m.user_id=$1 ORDER BY c.name',[user.id])
-      : await pool.query('SELECT id,name,organization_number,customer_number,contact_name,contact_email FROM customers ORDER BY name');
+      : await pool.query('SELECT id,name,organization_number,customer_number,contact_name,contact_email,phone,billing_address,billing_postal_code,billing_city,billing_email,reference FROM customers ORDER BY name');
     return json(res,200,q.rows.map(customerLabel));
   }
   if (url.pathname==='/api/customers' && method==='POST') {
     admin(user); const b=await body(req);
     if (!text(b.name)) throw fail(400,'Mangler kundenavn');
-    const q=await pool.query('INSERT INTO customers(name,organization_number,contact_name,contact_email) VALUES ($1,$2,$3,$4) RETURNING *',[b.name.trim(),text(b.organization_number,30),text(b.contact_name,200),text(b.contact_email,320)]);
+    const q=await pool.query('INSERT INTO customers(name,organization_number,contact_name,contact_email,phone,billing_address,billing_postal_code,billing_city,billing_email,reference) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',[b.name.trim(),text(b.organization_number,30),text(b.contact_name,200),text(b.contact_email,320),text(b.phone,50),text(b.billing_address,400),text(b.billing_postal_code,20),text(b.billing_city,100),text(b.billing_email,320),text(b.reference,150)]);
     return json(res,201,customerLabel(q.rows[0]));
   }
   const customerEdit=url.pathname.match(/^\/api\/customers\/([0-9a-f-]{36})$/i);
   if(customerEdit&&method==='PATCH'){
     admin(user);const b=await body(req);
-    const email=text(b.contact_email,320);
+    const email=text(b.contact_email,320),billingEmail=text(b.billing_email,320);
     if(!text(b.name,200))throw fail(400,'Kundenavn mangler');
     if(email&&!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email))throw fail(400,'Ugyldig e-postadresse');
-    const q=await pool.query('UPDATE customers SET name=$2,organization_number=$3,contact_name=$4,contact_email=$5 WHERE id=$1 RETURNING *',[customerEdit[1],b.name.trim(),text(b.organization_number,30),text(b.contact_name,200),email]);
+    if(billingEmail&&!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(billingEmail))throw fail(400,'Ugyldig faktura-e-post');
+    const q=await pool.query('UPDATE customers SET name=$2,organization_number=$3,contact_name=$4,contact_email=$5,phone=$6,billing_address=$7,billing_postal_code=$8,billing_city=$9,billing_email=$10,reference=$11 WHERE id=$1 RETURNING *',[customerEdit[1],b.name.trim(),text(b.organization_number,30),text(b.contact_name,200),email,text(b.phone,50),text(b.billing_address,400),text(b.billing_postal_code,20),text(b.billing_city,100),billingEmail,text(b.reference,150)]);
     if(!q.rowCount)throw fail(404,'Kunde ikke funnet');
     return json(res,200,customerLabel(q.rows[0]));
   }

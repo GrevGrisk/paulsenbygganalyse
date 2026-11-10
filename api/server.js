@@ -337,8 +337,9 @@ async function handler(req,res) {
   }
   if(url.pathname==='/api/customer/quotes' && method==='GET'){
     if(user.role!=='customer')throw fail(403,'Ingen kundetilgang');
-    const q=await pool.query(`SELECT q.id,q.property_address,q.services,q.status,q.created_at,q.public_token FROM quote_requests q
-      JOIN customer_memberships m ON m.customer_id=q.customer_id WHERE m.user_id=$1
+    const q=await pool.query(`SELECT DISTINCT q.id,q.property_address,q.services,q.status,q.created_at,q.public_token FROM quote_requests q
+      WHERE EXISTS (SELECT 1 FROM customer_memberships m WHERE m.customer_id=q.customer_id AND m.user_id=$1)
+      OR lower(q.email)=(SELECT lower(email) FROM portal_users WHERE id=$1)
       ORDER BY q.created_at DESC LIMIT 100`,[user.id]);
     return json(res,200,q.rows);
   }

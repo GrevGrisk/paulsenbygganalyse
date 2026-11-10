@@ -509,7 +509,7 @@ async function handler(req,res) {
       if(sendEmail){
         const contact=await pool.query('SELECT c.contact_email,c.name FROM customers c JOIN properties p ON p.customer_id=c.id JOIN reports r ON r.property_id=p.id WHERE r.id=$1',[reportId]);
         recipient=contact.rows[0]?.contact_email?.trim();
-        if(!recipient||!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(recipient))throw fail(400,'Kunden mangler gyldig kontakt-e-post for utsending');
+        if(!recipient||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient))throw fail(400,'Kunden mangler gyldig kontakt-e-post for utsending');
       }
       const published=await transaction(async c=>{
         const q=await c.query(`UPDATE reports SET status='published',published_by=$2,published_at=now(),updated_at=now()

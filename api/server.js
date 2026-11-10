@@ -446,7 +446,7 @@ async function handler(req,res) {
     const kind=(url.searchParams.get('kind')||'funn01').replace(/[^a-z0-9-]/gi,'').slice(0,40);
     return json(res,201,{url:await storeImage(report,bytes,kind)});
   }
-  const match=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})(?:\/(submit|approve|publish|reopen|revise))?$/i);
+  const match=url.pathname.match(/^\/api\/reports\/([0-9a-f-]{36})(?:\/(submit|approve|publish|reopen|revise|notify))?$/i);
   if (match) {
     const reportId=match[1],action=match[2];
     const r=await reportAccess(user,reportId);
@@ -499,6 +499,19 @@ async function handler(req,res) {
           VALUES($1,(SELECT COALESCE(MAX(version_number),0)+1 FROM report_versions WHERE report_id=$1),$2,$3)`,[reportId,JSON.stringify(q.rows[0].content),user.id]);
         return {id:reportId,status:'approved'};
       }));
+    }
+    if (method==='POST' && action==='notify') {
+      admin(user);
+      if(r.status!=='published')throw fail(409,'Kun publiserte rapporter kan varsles');
+      if(!process.env.RESEND_API_KEY||!process.env.QUOTE_NOTIFY_FROM)throw fail(503,'E-postutsending er ikke konfigurert');
+      const contact=await pool.query('SELECT c.contact_email FROM customers c JOIN properties p ON p.customer_id=c.id JOIN reports r ON r.property_id=p.id WHERE r.id=$1',[reportId]);
+      const recipient=contact.rows[0]?.contact_email?.trim();
+      if(!recipient||!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(recipient))throw fail(400,'Kunden mangler gyldig kontakt-e-post for utsending');
+      const reportCode=reportLabel(r).report_code;
+      let response;
+      try{response=await fetch('https://api.resend.com/emails',{method:'POST',signal:AbortSignal.timeout(10000),headers:{Authorization:'Bearer '+process.env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.QUOTE_NOTIFY_FROM,to:[recipient],subject:'Rapport '+reportCode+' er klar – Paulsen Bygganalyse',text:'Hei,\\n\\nRapport '+reportCode+' er publisert og tilgjengelig i kundeportalen.\\n\\nÅpne kundeportalen: https://portal.paulsenbygganalyse.no/kunde\\n\\nMed vennlig hilsen\\nPaulsen Bygganalyse'})})}catch(e){console.error('Report resend failed',e);throw fail(502,'E-posttjenesten svarte ikke')}
+      if(!response.ok){console.error('Report resend failed',response.status,(await response.text()).slice(0,300));throw fail(502,'E-posten kunne ikke sendes. Kontroller at avsenderdomenet er verifisert i Resend')}
+      return json(res,200,{email_sent:true,recipient});
     }
     if (method==='POST' && action==='publish') {
       admin(user);

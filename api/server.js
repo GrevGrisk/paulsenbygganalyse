@@ -202,6 +202,14 @@ async function handler(req,res) {
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' https: data: blob:; base-uri 'none'; frame-ancestors 'none'"});
     return res.end(page);
   }
+  if(url.pathname==='/tilbud/dokument'&&req.method==='GET'){
+    const token=url.searchParams.get('token');const quoteId=url.searchParams.get('id');
+    if(token&&!/^[a-f0-9]{48}$/.test(token))throw fail(400,'Ugyldig lenke');
+    if(!token){const u=await currentUser(req);staff(u);if(!id(quoteId))throw fail(400,'Ugyldig tilbud')}
+    const page=await fs.readFile(new URL('./quote-document.html',import.meta.url));
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src https: data:; base-uri 'none'; frame-ancestors 'none'"});
+    return res.end(page);
+  }
   if (url.pathname==='/tilbud/svar' && req.method==='GET') {
     const page=await fs.readFile(new URL('./quote-accept.html',import.meta.url));
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' https: data: blob:; base-uri 'none'; frame-ancestors 'none'"});
@@ -269,10 +277,15 @@ async function handler(req,res) {
     }else console.warn('Quote email notification not configured: RESEND_API_KEY / QUOTE_NOTIFY_FROM');
     return json(res,201,{ok:true});
   }
+  const quotePreview=url.pathname.match(/^\/api\/quote-requests\/([0-9a-f-]{36})\/preview$/i);
+  if(quotePreview&&method==='GET'){
+    staff(user);const q=await pool.query('SELECT * FROM quote_requests WHERE id=$1',[quotePreview[1]]);
+    if(!q.rowCount)throw fail(404,'Tilbud ikke funnet');return json(res,200,q.rows[0]);
+  }
   const quotePublic=url.pathname.match(/^\/api\/quote\/([a-f0-9]{48})$/);
   const quoteRespond=url.pathname.match(/^\/api\/quote\/([a-f0-9]{48})\/respond$/);
   if(quotePublic && method==='GET'){
-    const q=await pool.query("SELECT customer_name,property_address,services,line_items,discount_percent,price_display,offer_notes,valid_until,status,public_token FROM quote_requests WHERE public_token=$1 AND status IN ('sent','accepted','declined')",[quotePublic[1]]);
+    const q=await pool.query("SELECT customer_name,property_address,services,line_items,discount_percent,price_display,offer_notes,valid_until,status,public_token,sent_at,accepted_at,accepted_by_name FROM quote_requests WHERE public_token=$1 AND status IN ('sent','accepted','declined')",[quotePublic[1]]);
     if(!q.rowCount)throw fail(404,'Tilbud ikke funnet');
     return json(res,200,q.rows[0]);
   }
@@ -283,6 +296,7 @@ async function handler(req,res) {
       const offer=q.rows[0];
       if(!offer||offer.status!=='sent')throw fail(409,'Tilbudet er ikke tilgjengelig for svar');
       if(offer.valid_until && new Date(String(offer.valid_until).slice(0,10)+'T23:59:59Z')<new Date())throw fail(409,'Tilbudet er utløpt');
+      if(b.action==='accepted'&&(!b.accepted_terms||!text(b.signer_name,200)||!text(b.signer_email,254)))throw fail(400,'Navn, e-post og bekreftelse av vilkår kreves');
       if(b.action==='declined'){await c.query("UPDATE quote_requests SET status='declined',updated_at=now() WHERE id=$1",[offer.id]);return {status:'declined'};}
       const cust=await c.query('INSERT INTO customers(name,organization_number) VALUES($1,$2) RETURNING id',[offer.customer_name,offer.organization_number]);
       const prop=await c.query('INSERT INTO properties(customer_id,name,address,postal_code,municipality,cadastral_reference) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',[cust.rows[0].id,offer.property_address,offer.property_address,offer.postal_code,offer.municipality,[offer.gnr,offer.bnr].filter(Boolean).join('/')]);
@@ -339,7 +353,7 @@ async function handler(req,res) {
     if(!Array.isArray(b.line_items)||b.line_items.length>30||!b.line_items.every(x=>text(x.description,200)&&Number.isFinite(x.price)&&x.price>=0&&x.price<=10000000)||!Number.isFinite(b.discount_percent)||b.discount_percent<0||b.discount_percent>100||!['incl','excl'].includes(b.price_display)||!['priced','sent'].includes(b.status))throw fail(400,'Ugyldig tilbudspris');
     if(b.valid_until && !/^\d{4}-\d{2}-\d{2}$/.test(b.valid_until))throw fail(400,'Ugyldig gyldighetsdato');
     const q=await pool.query(`UPDATE quote_requests SET line_items=$2,discount_percent=$3,price_display=$4,offer_notes=$5,valid_until=$6,status=$7,sent_at=CASE WHEN $7='sent' THEN now() ELSE sent_at END,updated_at=now()
-    WHERE id=$1 AND status IN ('new','priced','sent') RETURNING id,public_token,status`,[quoteEdit[1],JSON.stringify(b.line_items),b.discount_percent,b.price_display,text(b.offer_notes,4000),b.valid_until||null,b.status]);
+    WHERE id=$1 AND status IN ('new','priced','sent') RETURNING id,public_token,status`,[quoteEdit[1],JSON.stringify(b.line_items),b.discount_percent,b.price_display,text(b.offer_notes,4000),b.valid_until||(b.status==='sent'?new Date(Date.now()+14*86400000).toISOString().slice(0,10):null),b.status]);
     if(!q.rowCount)throw fail(409,'Tilbudet kan ikke endres');
     return json(res,200,{...q.rows[0],url:'/tilbud/svar?token='+q.rows[0].public_token});
   }

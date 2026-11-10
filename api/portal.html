@@ -111,7 +111,7 @@ async function load(){
     const reports=await api('/api/reports?property_id='+encodeURIComponent(p.id));customer.properties.push({...p,reports});
    }
   }
-  updateCustomerOptions();
+  updateCustomerOptions();el('contactCustomer').dispatchEvent(new Event('change'));
  }catch(e){el('dashboardError').textContent=e.message}
 }
 async function submitForm(e,path,makeBody){e.preventDefault();const button=e.target.querySelector('button');button.disabled=true;el('staffMessage').textContent='';

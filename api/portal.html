@@ -96,7 +96,7 @@ async function deleteReport(report){
 el('customerSearch').addEventListener('input',updateCustomerOptions);
 el('customerSelect').addEventListener('change',e=>{selectedCustomerId=e.target.value;renderCustomerReports()});
 async function load(){
- const me=await api('/api/me');current=me;el('welcome').textContent='Innlogget som '+me.full_name+' ('+me.role+')';
+ const me=await api('/api/me');current=me;if(me.role==='customer'){location.replace('/kunde');return;}el('welcome').textContent='Innlogget som '+me.full_name+' ('+me.role+')';
  if(new URLSearchParams(location.search).get('next')==='pilot'&&me.role!=='customer'){location.replace('/pilot');return}
  el('staff').hidden=me.role==='customer';el('customerForm').hidden=me.role!=='admin';show('dashboard');
  try{

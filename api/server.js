@@ -249,7 +249,7 @@ async function handler(req,res) {
         const response=await fetch('https://api.resend.com/emails',{
           method:'POST',signal:AbortSignal.timeout(7000),
           headers:{'Authorization':'Bearer '+process.env.RESEND_API_KEY,'Content-Type':'application/json'},
-          body:JSON.stringify({from:process.env.QUOTE_NOTIFY_FROM,to:['post@paulsenbygganalyse.no'],subject:'Ny tilbudsforespørsel – '+b.customer_name.trim().slice(0,100),text:['Ny forespørsel er registrert i pilotportalen.','', 'Kunde: '+b.customer_name.trim(),'E-post: '+b.email.trim(),'Adresse: '+b.property_address.trim(),'Tjenester: '+b.services.join(', '),'', 'Åpne: https://portal.paulsenbygganalyse.no/tilbud/admin'].join('\\n')})
+          body:JSON.stringify({from:process.env.QUOTE_NOTIFY_FROM,to:['post@paulsenbygganalyse.no'],subject:'Ny tilbudsforespørsel – '+b.customer_name.trim().slice(0,100),text:['Ny forespørsel er registrert i pilotportalen.','', 'Kunde: '+b.customer_name.trim(),'E-post: '+b.email.trim(),'Adresse: '+b.property_address.trim(),'Tjenester: '+b.services.join(', '),'', 'Åpne: https://portal.paulsenbygganalyse.no/tilbud/admin'].join('\n')})
         });
         if(!response.ok)console.error('Quote notification failed:',response.status,(await response.text()).slice(0,300));
       }catch(error){console.error('Quote notification failed:',error.message);}
